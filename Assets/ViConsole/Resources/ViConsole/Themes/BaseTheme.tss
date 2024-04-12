@@ -1,0 +1,13 @@
+:root {
+    --primary-color: #ffffff;
+    --secondary-color: #5fc3f5;
+    --background-color: #aeaeae;
+    
+    --background-alpha: 50%;
+    
+    -unity-font-definition: resource('ViConsole/Fonts/Inconsolata-VariableFont_wdth,wght');
+
+    
+
+    /*--unity-sync-text-editor-engine: true;*/
+}

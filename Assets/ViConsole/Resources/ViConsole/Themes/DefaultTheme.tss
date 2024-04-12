@@ -1,0 +1,15 @@
+@import 'BaseTheme.tss';
+
+.main-frame {
+    height: 40%;
+    top: 0;
+    left: 0;
+    right: 0;
+    background-color: var(--background-color);
+
+    
+}
+
+.wrap {
+    white-space: normal;
+}
