@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
@@ -10,39 +11,33 @@ namespace ViConsole
     {
         [SerializeField] UIDocument doc;
 
+        [Header("Config")] [SerializeField] int scrollback = 100;
+
+        //ConcurrentQueue<string> messages = new();
+        RingList<string> messages = new();
+
+        //List<string> messages = new();
+        ListView _listView;
+
         void Start()
         {
             OpenConsole();
+            messages.MaxLength = scrollback;
+            Application.logMessageReceivedThreaded += OnLogReceived;
+        }
+
+        void OnLogReceived(string message, string stacktrace, LogType type)
+        {
+            messages.Add(message);
+            _listView.schedule.Execute(() => _listView.RefreshItems());
         }
 
         [ContextMenu("Open Console")]
-        public void OpenConsole()
+        public async void OpenConsole()
         {
+            CommandRunner.Instance.Initialize();
             var root = doc.rootVisualElement;
-            var listView = root.Q<ListView>();
-            var items = new List<string>()
-            {
-                "hello",
-                "world",
-                "hello <color=red>world</color>!",
-                "hello <color=red>world</color>! hello <color=red>world</color>! hello <color=red>world</color>! hello <color=red>world</color>! hello <color=red>world</color>! hello <color=red>world</color>! hello <color=red>world</color>! hello <color=red>world</color>! hello <color=red>world</color>! hello <color=red>world</color>! hello <color=red>world</color>! hello <color=red>world</color>! hello <color=red>world</color>! hello <color=red>world</color>! hello <color=red>world</color>! hello <color=red>world</color>! hello <color=red>world</color>! hello <color=red>world</color>! hello <color=red>world</color>! hello <color=red>world</color>! hello <color=red>world</color>! hello <color=red>world</color>!",
-                "world",
-                "world",
-                "world",
-                "world",
-                "world",
-                "world",
-                "world",
-                "world",
-                "world",
-                "world",
-                "world",
-                "world",
-                "world",
-                "world",
-                "world",
-                "world",
-            };
+            _listView = root.Q<ListView>();
 
             Label makeLabel()
             {
@@ -51,34 +46,14 @@ namespace ViConsole
                 return label;
             }
 
-            listView.makeItem = makeLabel;
-            listView.bindItem = (e, i) => ((Label)e).text = items[i];
-            listView.itemsSource = items;
+            _listView.makeItem = makeLabel;
+            _listView.bindItem = (e, i) => ((Label)e).text = messages[i];
+            _listView.unbindItem = (e, i) => ((Label)e).text = "<--->";
+            //_listView.destroyItem = element => element.RemoveFromHierarchy();
+            _listView.itemsSource = messages;
 
-            listView.Q<ScrollView>().mouseWheelScrollSize = 10000;
-
-            // var inputBox = root.Q<TextField>();
-            // inputBox.Q<TextElement>().enableRichText = true;
-            // inputBox.Q<TextElement>().parseEscapeSequences = true;
-            // inputBox.RegisterValueChangedCallback(OnValueChanged);
+            _listView.Q<ScrollView>().mouseWheelScrollSize = 10000;
         }
 
-        // void OnValueChanged(ChangeEvent<string> args)
-        // {
-        //     Debug.Log(args.newValue);
-        //     // if (args.target is not TextField txt) return;
-        //     //
-        //     // // removed
-        //     // if (args.newValue.Length < args.previousValue.Length)
-        //     //     return;
-        //     //
-        //     // var diffPosition = 0;
-        //     // for (int i = 0, j = 0; i < args.newValue.Length && j < args.previousValue.Length; ++i, ++j)
-        //     // {
-        //     //     if()
-        //     // }
-        //     //
-        //     // txt.SetValueWithoutNotify("");
-        // }
     }
 }

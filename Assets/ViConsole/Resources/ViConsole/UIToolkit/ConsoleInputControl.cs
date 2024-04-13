@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using UnityEngine;
+using UnityEngine.UI;
 using UnityEngine.UIElements;
+using ViConsole.Extensions;
 
 namespace ViConsole.UIToolkit
 {
@@ -15,6 +17,7 @@ namespace ViConsole.UIToolkit
         int _lastSelectIndex = 0;
         int _lastCursorIndex = 0;
         int _lastTaggedLength = 0;
+        int _noParsesCount = 0;
         string _command = "";
         Dictionary<int, int> _indexReMap = new();
 
@@ -25,6 +28,39 @@ namespace ViConsole.UIToolkit
             _textElement.generateVisualContent += OnGenerateVisualContent;
 
             this.RegisterValueChangedCallback(OnValueChanged);
+            RegisterCallback<KeyDownEvent>(OnKeyDown, TrickleDown.TrickleDown);
+        }
+
+        void OnKeyDown(KeyDownEvent evt)
+        {
+            if (evt.keyCode is not (KeyCode.Return or KeyCode.KeypadEnter))
+                return;
+
+            var split = _command.Split(" ");
+            if (split.Length == 0) return;
+            var cmd = split[0];
+            CommandRunner.Instance.Execute(cmd);
+            ClearCommand();
+
+            focusController.IgnoreEvent(evt);
+            evt.StopImmediatePropagation();
+            evt.StopPropagation();
+            textSelection.SelectAll();
+
+            SetFocus();
+        }
+
+        void ClearCommand()
+        {
+            _command = "";
+            cursorIndex = 0;
+            selectIndex = 0;
+            SetValueWithoutNotify("");
+        }
+
+        public void SetFocus()
+        {
+            schedule.Execute(() => { _textElement.Focus(); });
         }
 
         void OnGenerateVisualContent(MeshGenerationContext obj)
@@ -32,8 +68,8 @@ namespace ViConsole.UIToolkit
             _lastCursorIndex = cursorIndex;
             _lastSelectIndex = selectIndex;
 
-            Debug.Log(_textElement.selection.cursorIndex);
-            Debug.Log(_textElement.selection.selectIndex);
+            // Debug.Log(_textElement.selection.cursorIndex);
+            // Debug.Log(_textElement.selection.selectIndex);
         }
 
         void OnValueChanged(ChangeEvent<string> args)
@@ -47,44 +83,40 @@ namespace ViConsole.UIToolkit
             var newIndex = cursorIndex;
             var newValue = args.newValue;
 
-            // special cases of </noparse> input
-            if (lastStart == lastEnd && newIndex < _lastCursorIndex && _lastCursorIndex - newIndex > 1)
-            {
-                HandleInsert(ref _command, newValue, _lastCursorIndex);
-            }
-            else
-            {
-                // If anything is selected, it will be removed and replaced 
-                if (lastStart != lastEnd)
-                {
-                    Debug.Log($"Removing start: {lastStart} - {lastEnd} ({lastEnd - lastStart}");
-                    _command = _command.Remove(lastStart, lastEnd - lastStart);
-                }
+            var unexpectedNoParses = CheckForNoParses(newValue);
 
-                if (newIndex < lastStart)
-                {
+            bool hasSelection = lastStart != lastEnd;
+
+            // If anything is selected, it will be removed and replaced 
+            if (hasSelection)
+            {
+                Debug.Log($"Removing start: {lastStart} - {lastEnd} ({lastEnd - lastStart}");
+                _command = _command.Remove(lastStart, lastEnd - lastStart);
+            }
+
+            if (newIndex < lastStart)
+            {
+                if (!hasSelection)
                     HandleBackDelete(ref _command, newIndex);
-                }
-                else if (newIndex > lastStart)
-                {
-                    if (newIndex - lastStart > 1)
-                        HandlePaste(ref _command, newValue, lastStart, newIndex - lastStart);
-                    else
-                        HandleInsert(ref _command, newValue, lastStart);
-                }
-                else if (newIndex == lastStart)
-                {
+            }
+            else if (newIndex > lastStart)
+            {
+                if (newIndex - lastStart > 1)
+                    HandlePaste(ref _command, newValue, lastStart, newIndex - lastStart);
+                else
+                    HandleInsert(ref _command, newValue, lastStart);
+            }
+            else if (newIndex == lastStart)
+            {
+                if (!hasSelection)
                     HandleFrontDelete(ref _command, newIndex);
-                }
             }
 
-            int noparse = _command.IndexOf("</noparse>", StringComparison.OrdinalIgnoreCase);
-            while (noparse >= 0)
+            if (unexpectedNoParses && _command.Length > 0)
             {
-                _command = _command.Remove(noparse, "</noparse>".Length);
-                cursorIndex = noparse;
-                selectIndex = cursorIndex;
-                noparse = _command.IndexOf("</noparse>", StringComparison.OrdinalIgnoreCase);
+                Debug.LogWarning("Found rogue noparse closing tag. Nuking the entire command");
+                ClearCommand();
+                return;
             }
 
             var taggedCommand = FormatText(_command);
@@ -92,12 +124,33 @@ namespace ViConsole.UIToolkit
             SetValueWithoutNotify(taggedCommand);
         }
 
+        bool CheckForNoParses(string text)
+        {
+            var openIndices = text.IndicesOf("<noparse>").ToList();
+            var closeIndices = text.IndicesOf("</noparse>").ToList();
+
+            //case 1 - more noparses than expected
+            if (closeIndices.Count > _noParsesCount)
+                return true;
+
+            //case 2 - multiple closes before next open
+            for (int i = 0; i < openIndices.Count - 1; i++)
+            {
+                var open = openIndices[i];
+                var nextOpen = openIndices[i + 1];
+                var closes = closeIndices.Count(x => x > open & x < nextOpen);
+                if (closes > 1) return true;
+            }
+
+            return false;
+        }
+
         void HandlePaste(ref string command, string newValue, int index, int length)
         {
             var remappedIndex = RemapIndex(index);
 
             var inserted = newValue[remappedIndex..(remappedIndex + length)];
-            Debug.Log(inserted);
+            // Debug.Log(inserted);
             command = command.Insert(index, inserted);
         }
 
@@ -122,7 +175,7 @@ namespace ViConsole.UIToolkit
             var remappedIndex = RemapIndex(index);
 
             var inserted = newValue[remappedIndex];
-            Debug.Log(inserted);
+            //Debug.Log(inserted);
 
             command = command.Insert(index, inserted.ToString());
         }
@@ -150,39 +203,49 @@ namespace ViConsole.UIToolkit
             var sb = new StringBuilder();
             _indexReMap.Clear();
 
+            _noParsesCount = 0;
+
             var parts = txt.Split(" ", 3);
             if (parts.Length >= 1)
             {
-                sb.AppendFormat("<color=red><noparse>{0}</noparse></color>", parts[0]);
                 if (parts[0].Length > 0)
                 {
-                    _indexReMap[0] = "<color=red><noparse>".Length;
+                    int prefixLength = 0, suffixLength = 0;
+                    sb.Append(parts[0].NoParse(ref prefixLength, ref suffixLength).Colorize(Color.red, ref prefixLength, ref suffixLength));
+                    _indexReMap[0] = prefixLength;
                     var idx = parts[0].Length;
-                    _indexReMap[idx] = "</noparse></color>".Length;
+                    _indexReMap[idx] = suffixLength;
+                    _noParsesCount++;
                 }
             }
 
             if (parts.Length >= 2)
             {
+                sb.Append(" ");
                 var idx = parts[0].Length + 1;
-                sb.AppendFormat(" <b><noparse>{0}</noparse></b>", parts[1]);
                 if (parts[1].Length > 0)
                 {
-                    _indexReMap[idx] = "<b><noparse>".Length;
+                    int prefixLength = 0, suffixLength = 0;
+                    sb.Append(parts[1].NoParse(ref prefixLength, ref suffixLength).Decorate(StringDecoration.Bold, ref prefixLength, ref suffixLength));
+                    _indexReMap[idx] = prefixLength;
                     idx += parts[1].Length;
-                    _indexReMap[idx] = "</noparse></b>".Length;
+                    _indexReMap[idx] = suffixLength;
+                    _noParsesCount++;
                 }
             }
 
             if (parts.Length >= 3)
             {
+                sb.Append(" ");
                 var idx = parts[0].Length + 1 + parts[1].Length + 1;
-                sb.AppendFormat(" <i><noparse>{0}</noparse></i>", parts[2]);
                 if (parts[2].Length > 0)
                 {
-                    _indexReMap[idx] = "<i><noparse>".Length;
+                    int prefixLength = 0, suffixLength = 0;
+                    sb.Append(parts[2].NoParse(ref prefixLength, ref suffixLength).Decorate(StringDecoration.Italic, ref prefixLength, ref suffixLength));
+                    _indexReMap[idx] = prefixLength;
                     idx += parts[2].Length;
-                    _indexReMap[idx] = "</noparse></i>".Length;
+                    _indexReMap[idx] = suffixLength;
+                    _noParsesCount++;
                 }
             }
 
