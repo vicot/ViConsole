@@ -3,5 +3,10 @@
     <engine:VisualElement name="ConsoleFrame" class="main-frame" style="bottom: auto;">
         <engine:ListView selection-type="None" allow-add="false" allow-remove="false" show-alternating-row-backgrounds="All" virtualization-method="DynamicHeight" />
         <ViConsole.UIToolkit.ConsoleInputControl placeholder-text="Enter command..." hide-placeholder-on-focus="true" />
+        <engine:VisualElement style="flex-grow: 0; top: 0; left: 0; bottom: 0; right: 0; flex-direction: column; display: none;">
+            <engine:VisualElement name="VisualElement" style="flex-grow: 1; position: absolute; background-color: rgba(0, 0, 0, 0.56); flex-direction: column; justify-content: space-between; right: auto; left: auto; top: auto; bottom: auto;">
+                <engine:Label text="Label" style="color: rgb(255, 255, 255); top: 0; left: 0; right: 0; bottom: 0;" />
+            </engine:VisualElement>
+        </engine:VisualElement>
     </engine:VisualElement>
 </engine:UXML>
