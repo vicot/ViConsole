@@ -92,6 +92,8 @@ namespace ViConsole
             throw new NotImplementedException();
         }
 
+        public int Count => _queue.Count;
+        
         int ICollection.Count => _queue.Count;
 
         public bool IsSynchronized { get; }

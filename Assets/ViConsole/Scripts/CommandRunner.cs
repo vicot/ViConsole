@@ -9,25 +9,32 @@ using ViConsole.Attributes;
 using ViConsole.Extensions;
 using ViConsole.Parsing;
 using ViConsole.Tree;
+using Object = UnityEngine.Object;
 
 namespace ViConsole
 {
     public interface ICommandRunner
     {
-        Task Initialize(Action<string, LogType> addMessage);
+        Task Initialize(AddMessage addMessage);
         object ExecuteCommand(IEnumerable<Token> tokens);
         Tree.Tree CommandTree { get; }
     }
 
+    public delegate void AddMessage(string message, LogType level);
+    
     public class CommandRunner : ICommandRunner
     {
-        Action<string, LogType> _addMessage;
+        AddMessage _addMessage;
         public Tree.Tree CommandTree { get; } = new();
 
-        public async Task Initialize(Action<string, LogType> addMessage)
+        Assembly _rootAssembly;
+
+        public async Task Initialize(AddMessage addMessage)
         {
             _addMessage = addMessage;
-            await Task.Run(DiscoverCommands);
+            _rootAssembly = AppDomain.CurrentDomain.GetAssemblies()
+                .FirstOrDefault(a => a != null && a.FullName.StartsWith("Assembly-CSharp") && !a.FullName.StartsWith("Assembly-CSharp-Editor"));
+            await Task.Run(Discover);
             _addMessage("Console initialized", LogType.Log);
         }
 
@@ -90,7 +97,6 @@ namespace ViConsole
                             }
                         }
 
-
                         var result = command.Execute(target, args);
                         operandStack.Push(result);
                         break;
@@ -110,37 +116,97 @@ namespace ViConsole
             return operandStack.Count > 0 ? operandStack.Pop() : null;
         }
 
-        private void DiscoverCommands()
+        private void Discover()
         {
             var commands = CommandTree.GetDomain(Domains.Commands);
-            var assembly = Assembly.GetExecutingAssembly();
-            foreach (var type in assembly.GetTypes())
+            var presenters = CommandTree.GetDomain(Domains.Presenters);
+
+            var assemblies = GetAssemblies();
+            foreach (var type in assemblies.SelectMany(a => a.GetTypes()))
             {
                 var methods = type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance);
                 foreach (var method in methods)
                 {
-                    var attribute = method.GetCustomAttribute<CommandAttribute>();
-                    if (attribute != null)
-                        commands.RegisterCommand(method, attribute);
+                    DiscoverCommand(commands, method);
+                    DiscoverPresenter(presenters, method);
                 }
             }
 
             commands.IsEnabled = true;
         }
 
+        void DiscoverCommand(IDomainNode domain, MethodInfo method)
+        {
+            var attribute = method.GetCustomAttribute<CommandAttribute>();
+            if (attribute != null)
+                domain.RegisterCommand(method, attribute);
+        }
+        
+        void DiscoverPresenter(IDomainNode domain, MethodInfo method)
+        {
+            var attribute = method.GetCustomAttribute<PresenterProviderForAttribute>();
+            if (attribute != null)
+                domain.RegisterPresenter(method, attribute);
+        }
+
+        #region builtin presenters
+
+        [PresenterProviderFor(typeof(GameObject))]
+        static void GameObjectPresenter(GameObject obj, AddMessage addMessage)
+        {
+            addMessage($"Name: {obj.name}", LogType.Log);
+            addMessage($"Tag: {obj.tag}", LogType.Log);
+            addMessage($"Layer: {LayerMask.LayerToName(obj.layer)}", LogType.Log);
+            addMessage($"Active: {obj.activeSelf}", LogType.Log);
+            addMessage($"Position: {obj.transform.position}", LogType.Log);
+            addMessage($"Rotation: {obj.transform.rotation}", LogType.Log);
+            addMessage($"Scale: {obj.transform.localScale}", LogType.Log);
+        }
+        
+        [PresenterProviderFor(typeof(Component))]
+        static void ComponentPresenter(Component obj, AddMessage addMessage)
+        {
+            addMessage($"Name: {obj.name}", LogType.Log);
+            addMessage($"Tag: {obj.tag}", LogType.Log);
+            addMessage($"Position: {obj.transform.position}", LogType.Log);
+            addMessage($"Rotation: {obj.transform.rotation}", LogType.Log);
+            addMessage($"Scale: {obj.transform.localScale}", LogType.Log);
+        }        
+        
+        [PresenterProviderFor(typeof(Object))]
+        static void UnityObjectPresenter(Object obj, AddMessage addMessage)
+        {
+            if (obj is GameObject go)
+            {
+                GameObjectPresenter(go, addMessage);
+                return;
+            }
+            
+            if (obj is Component comp)
+            {
+                ComponentPresenter(comp,addMessage);
+                return;
+            }
+
+            
+            addMessage($"Name: {obj.name}", LogType.Log);
+        }
+
+        #endregion
+        
         #region builtin commands
 
         [Command("true", isBuiltIn: true, hide: true)]
-        public static bool True() => true;
+        static bool True() => true;
 
         [Command("false", isBuiltIn: true, hide: true)]
-        public static bool False() => false;
+        static bool False() => false;
 
         [Command("null", isBuiltIn: true, hide: true)]
-        public static object Null() => null;
+        static object Null() => null;
 
         [Command("ls", "List all commands", isBuiltIn: true)]
-        private void PrintAllCommands()
+        void PrintAllCommands()
         {
             var commands = ViConsole.Instance.CommandTree.GetDomain(Domains.Commands);
             _addMessage("Available commands:".Decorate(StringDecoration.Italic), LogType.Log);
@@ -155,22 +221,25 @@ namespace ViConsole
         }
 
         [Command("__builtin_index", isBuiltIn: true, hide: true)]
-        private static object Index(object obj, int index)
+        static object Index(object obj, object index)
         {
+            if (!Int32.TryParse(index.ToString(), out var i))
+                throw new CommandException("Index must be an integer");
+
             if (obj is IList list)
-                return list[index];
-            else throw new CommandException("Index can only be used on lists");
+                return list[i];
+            throw new CommandException("Index can only be used on lists");
         }
 
 
         [Command("__builtin_concat", isBuiltIn: true, hide: true)]
-        private static object Concatenate(object a, object b) => a.ToString() + b.ToString();
+        static object Concatenate(object a, object b) => a.ToString() + b.ToString();
 
         [Command("echo", "Print result", isBuiltIn: true)]
-        private void Print(object obj) => _addMessage($"'{obj.ToString()}'", LogType.Log);
+        void Print(object obj) => _addMessage($"'{obj.ToString()}'", LogType.Log);
 
         [Command("var", "Save named variable", isBuiltIn: true)]
-        private void SetVar(string name, object value)
+        void SetVar(string name, object value)
         {
             var vars = CommandTree.GetDomain(Domains.Variables);
             vars.RegisterVariable(name, value);
@@ -179,7 +248,7 @@ namespace ViConsole
 
 
         [Command("lsvar", "List saved variables", isBuiltIn: true)]
-        private void GetVars()
+        void GetVars()
         {
             var vars = CommandTree.GetDomain(Domains.Variables);
             foreach (var variable in vars.OfType<IVariableNode>())
@@ -189,16 +258,26 @@ namespace ViConsole
         }
 
         [Command("types", "Find types by name", isBuiltIn: true)]
-        private List<Type> FindType(string name)
+        List<Type> FindType(string name)
         {
-            return AppDomain.CurrentDomain.GetAssemblies()
-                .Select(a => a?.GetTypes().FirstOrDefault(t => string.Equals(t.Name, "Camera", StringComparison.OrdinalIgnoreCase)))
+            return GetAssemblies()
+                .Select(a => a.GetTypes().FirstOrDefault(t => string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase)))
                 .Where(x => x != null)
                 .ToList();
         }
 
+        IEnumerable<Assembly> GetAssemblies()
+        {
+            if (_rootAssembly == null) return Enumerable.Empty<Assembly>();
+            List<AssemblyName> assemblyNames = _rootAssembly.GetReferencedAssemblies().ToList();
+            List<Assembly> assemblies = new();
+            assemblies.Add(_rootAssembly);
+            assemblies.AddRange(assemblyNames.Select(Assembly.Load));
+            return assemblies;
+        }
+
         [Command("find", "Find object in hierarchy by Name, Tag or component Type", isBuiltIn: true)]
-        private object GetObject(FindByTypes type, object value)
+        object GetObject(FindByTypes type, object value)
         {
             switch (type)
             {
@@ -227,6 +306,38 @@ namespace ViConsole
 
             _addMessage("No object found", LogType.Warning);
             return null;
+        }
+        
+        [Command("describe", "Describe object", isBuiltIn: true)]
+        void Describe(object obj)
+        {
+            if (obj == null)
+            {
+                _addMessage("Object is null", LogType.Warning);
+                return;
+            }
+
+            if (!CommandTree.GetDomain(Domains.Presenters).TryGetPresenter(obj.GetType(), out var presenter))
+            {
+                _addMessage(obj.ToString(), LogType.Log);
+                _addMessage("No presenter found for object", LogType.Warning);
+                return;
+            }
+
+            presenter.Execute(new []{obj, _addMessage});
+
+            var type = obj.GetType();
+            _addMessage($"Type: {type}", LogType.Log);
+            foreach (var property in type.GetProperties())
+            {
+                if (property.GetIndexParameters().Length > 0) continue;
+                _addMessage($"{property.Name}: {property.GetValue(obj)}", LogType.Log);
+            }
+            
+            foreach (var field in type.GetFields())
+            {
+                _addMessage($"{field.Name}: {field.GetValue(obj)}", LogType.Log);
+            }
         }
 
         #endregion

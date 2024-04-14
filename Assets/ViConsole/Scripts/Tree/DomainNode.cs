@@ -1,4 +1,6 @@
-﻿using System.Reflection;
+﻿using System;
+using System.Linq;
+using System.Reflection;
 using ViConsole.Attributes;
 
 namespace ViConsole.Tree
@@ -10,6 +12,8 @@ namespace ViConsole.Tree
         bool TryGetCommand(string name, out ICommandNode commandNode);
         void RegisterVariable(string name, object value);
         bool TryGetVariable(string name, out IVariableNode commandNode);
+        void RegisterPresenter(MethodInfo methodInfo, PresenterProviderForAttribute attribute);
+        bool TryGetPresenter(Type type, out IPresenterNode presenterNode);
     }
 
     public class DomainNode : TreeNode, IDomainNode
@@ -45,6 +49,29 @@ namespace ViConsole.Tree
         
         public bool TryGetVariable(string name, out IVariableNode commandNode) => TryGet(name, out commandNode);
         
+        public void RegisterPresenter(MethodInfo methodInfo, PresenterProviderForAttribute attribute)
+        {
+            var node = new PresenterNode(methodInfo, attribute);
+            AddNode(node);
+        }
+
+        public bool TryGetPresenter(Type type, out IPresenterNode presenterNode)
+        {
+            IPresenterNode bestMatch = null;
+            
+            foreach (var presenter in Nodes.OfType<IPresenterNode>())
+            {
+                if (presenter.Type.IsAssignableFrom(type))
+                {
+                    if(bestMatch == null || presenter.Type.IsSubclassOf(bestMatch.Type))
+                        bestMatch = presenter;
+                }
+            }
+
+            presenterNode = bestMatch;
+            return presenterNode != null;
+        }
+
         bool TryGet<T>(string name, out T commandNode) where T : class
         {
             var result = TryGetNode(name, out var node);

@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.TextCore.Text;
 using UnityEngine.UIElements;
 using ViConsole.Extensions;
@@ -21,6 +22,8 @@ namespace ViConsole
         CustomStyleProperty<Color> _propertyColorError = new CustomStyleProperty<Color>("--color-error");
         CustomStyleProperty<Color> _propertyColorException = new CustomStyleProperty<Color>("--color-exception");
         CustomStyleProperty<Color> _propertyColorVariable = new CustomStyleProperty<Color>("--color-variable");
+        CustomStyleProperty<Color> _propertyColorOperator = new CustomStyleProperty<Color>("--color-operator");
+        CustomStyleProperty<Color> _propertyColorLiterals = new CustomStyleProperty<Color>("--color-literals");
 
         Dictionary<LogType, InputStyle> logStyles = new();
         InputStyleSheet styleSheet;
@@ -28,6 +31,11 @@ namespace ViConsole
         [SerializeField] UIDocument doc;
 
         [Header("Config")] [SerializeField] int scrollback = 100;
+        [SerializeField] InputAction toggleConsoleAction;
+
+        InputAction previousCommandAction;
+        InputAction nextCommandAction;
+        
 
         internal static ViConsole Instance { get; private set; }
 
@@ -53,6 +61,13 @@ namespace ViConsole
 
             Instance = this;
             DontDestroyOnLoad(gameObject);
+            
+            nextCommandAction = new InputAction("NextCommand", InputActionType.Button, "<Keyboard>/downArrow");
+            previousCommandAction = new InputAction("PreviousCommand", InputActionType.Button, "<Keyboard>/upArrow");
+            nextCommandAction.Enable();
+            nextCommandAction.performed += ctx => _inputBox?.NextCommand();
+            previousCommandAction.Enable();
+            previousCommandAction.performed += ctx => _inputBox?.PreviousCommand();
         }
 
         async void Start()
@@ -100,8 +115,9 @@ namespace ViConsole
 
             _inputBox = _root.Q<ConsoleInputControl>();
             _inputBox.Controller = this;
-            if (!styleSet && styleSheet != null)
+            if (!styleSet)
             {
+                ApplyCustomStyle(_root.customStyle);
                 _inputBox.SetStyle(styleSheet);
                 styleSet = true;
             }
@@ -118,8 +134,12 @@ namespace ViConsole
             Color color;
             if (style.TryGetValue(_propertyPrimaryColor, out color))
             {
-                styleSheet[LexemeType.String] = new InputStyle(color, StringDecoration.Italic);
                 logStyles[LogType.Log] = new InputStyle(color, addNoParse: false);
+            }
+            
+            if (style.TryGetValue(_propertyColorLiterals, out color))
+            {
+                styleSheet[LexemeType.String] = new InputStyle(color, StringDecoration.Italic);
             }
 
             if (style.TryGetValue(_propertySecondaryColor, out color))
@@ -131,6 +151,15 @@ namespace ViConsole
             {
                 styleSheet[LexemeType.Identifier] = new InputStyle(color);
                 styleSheet[LexemeType.SpecialIdentifier] = new InputStyle(color);
+            }
+            
+            if (style.TryGetValue(_propertyColorOperator, out color))
+            {
+                styleSheet[LexemeType.Concatenation] = new InputStyle(color);
+                styleSheet[LexemeType.OpenIndex] = new InputStyle(color);
+                styleSheet[LexemeType.CloseIndex] = new InputStyle(color);
+                styleSheet[LexemeType.OpenInline] = new InputStyle(color);
+                styleSheet[LexemeType.CloseInline] = new InputStyle(color);
             }
 
             if (style.TryGetValue(_propertyColorError, out color))

@@ -6,5 +6,6 @@
         Commands,
         Variables,
         Globals,
+        Presenters
     }
 }

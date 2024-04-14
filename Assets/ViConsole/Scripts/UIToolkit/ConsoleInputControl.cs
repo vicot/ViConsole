@@ -13,14 +13,17 @@ namespace ViConsole.UIToolkit
     {
         const string NoParseOpenTag = "<noparse>";
         const string NoParseCloseTag = "</noparse>";
-        
+
+        List<string> _commandHistory;
+        int _commandHistoryIndex = 0;
+
         readonly TextElement _textElement;
 
         ISyntaxColorizer _colorizer;
-        
+
         int _lastSelectIndex = 0;
         int _lastCursorIndex = 0;
-        int _noParsesCount=> _colorizer.NoParsesCount;
+        int _noParsesCount => _colorizer.NoParsesCount;
         string _command = "";
         List<Token> _tokenizedCommand;
         Dictionary<int, int> _indexReMap => _colorizer.IndexReMap;
@@ -29,13 +32,15 @@ namespace ViConsole.UIToolkit
 
         public ConsoleInputControl()
         {
+            _commandHistory = new List<string>();
+
             _textElement = this.Q<TextElement>();
             _textElement.enableRichText = true;
             _textElement.generateVisualContent += OnGenerateVisualContent;
 
             this.RegisterValueChangedCallback(OnValueChanged);
             RegisterCallback<KeyDownEvent>(OnKeyDown, TrickleDown.TrickleDown);
-            
+
             _colorizer = new SyntaxColorizer();
         }
 
@@ -49,13 +54,11 @@ namespace ViConsole.UIToolkit
             if (evt.keyCode is not (KeyCode.Return or KeyCode.KeypadEnter))
                 return;
 
-            var split = _command.Split(" ");
-            if (split.Length == 0) return;
-            var cmd = split[0];
-            //CommandRunner.Instance.Execute(cmd)
+            _commandHistory.Add(_command);
+            _commandHistoryIndex = _commandHistory.Count - 1;
 
             Controller.ExecuteCommand(_tokenizedCommand, _command);
-            
+
             ClearCommand();
 
             focusController.IgnoreEvent(evt);
@@ -87,6 +90,7 @@ namespace ViConsole.UIToolkit
 
         void OnValueChanged(ChangeEvent<string> args)
         {
+            _commandHistoryIndex = _commandHistory.Count - 1;
             var lastStart = _lastSelectIndex;
             var lastEnd = _lastCursorIndex;
             if (lastStart > lastEnd) (lastStart, lastEnd) = (lastEnd, lastStart);
@@ -127,7 +131,11 @@ namespace ViConsole.UIToolkit
                 return;
             }
 
-            //var taggedCommand = FormatText(_command);
+            ShowCommand();
+        }
+
+        void ShowCommand()
+        {
             var lexems = Parser.Parse(_command);
             _tokenizedCommand = Parser.Tokenize(lexems);
             var taggedCommand = _colorizer.ColorizeSyntax(_command, _tokenizedCommand);
@@ -203,58 +211,20 @@ namespace ViConsole.UIToolkit
             return str[..position] + c + str[(position + 1)..];
         }
 
-        // private string FormatText(string txt)
-        // {
-        //     var sb = new StringBuilder();
-        //     _indexReMap.Clear();
-        //
-        //     _noParsesCount = 0;
-        //
-        //     var parts = txt.Split(" ", 3);
-        //     if (parts.Length >= 1)
-        //     {
-        //         if (parts[0].Length > 0)
-        //         {
-        //             int prefixLength = 0, suffixLength = 0;
-        //             sb.Append(parts[0].NoParse(ref prefixLength, ref suffixLength).Colorize(Color.red, ref prefixLength, ref suffixLength));
-        //             _indexReMap[0] = prefixLength;
-        //             var idx = parts[0].Length;
-        //             _indexReMap[idx] = suffixLength;
-        //             _noParsesCount++;
-        //         }
-        //     }
-        //
-        //     if (parts.Length >= 2)
-        //     {
-        //         sb.Append(" ");
-        //         var idx = parts[0].Length + 1;
-        //         if (parts[1].Length > 0)
-        //         {
-        //             int prefixLength = 0, suffixLength = 0;
-        //             sb.Append(parts[1].NoParse(ref prefixLength, ref suffixLength).Decorate(StringDecoration.Bold, ref prefixLength, ref suffixLength));
-        //             _indexReMap[idx] = prefixLength;
-        //             idx += parts[1].Length;
-        //             _indexReMap[idx] = suffixLength;
-        //             _noParsesCount++;
-        //         }
-        //     }
-        //
-        //     if (parts.Length >= 3)
-        //     {
-        //         sb.Append(" ");
-        //         var idx = parts[0].Length + 1 + parts[1].Length + 1;
-        //         if (parts[2].Length > 0)
-        //         {
-        //             int prefixLength = 0, suffixLength = 0;
-        //             sb.Append(parts[2].NoParse(ref prefixLength, ref suffixLength).Decorate(StringDecoration.Italic, ref prefixLength, ref suffixLength));
-        //             _indexReMap[idx] = prefixLength;
-        //             idx += parts[2].Length;
-        //             _indexReMap[idx] = suffixLength;
-        //             _noParsesCount++;
-        //         }
-        //     }
-        //
-        //     return sb.ToString();
-        // }
+        public void NextCommand()
+        {
+            ClearCommand();
+            _commandHistoryIndex = Mathf.Clamp(_commandHistoryIndex, 0, _commandHistory.Count - 1);
+            _command = _commandHistory[_commandHistoryIndex++];
+            ShowCommand();
+        }
+
+        public void PreviousCommand()
+        {
+            ClearCommand();
+            _commandHistoryIndex = Mathf.Clamp(_commandHistoryIndex, 0, _commandHistory.Count - 1);
+            _command = _commandHistory[_commandHistoryIndex--];
+            ShowCommand();
+        }
     }
 }
