@@ -1,14 +1,18 @@
-﻿namespace ViConsole.Graph
+﻿using System.Linq;
+using UnityEngine;
+using ViConsole.Attributes;
+
+namespace ViConsole.Tree
 {
-    public interface IGraph
+    public interface ITree
     {
     }
 
-    public class Graph : IGraph
+    public class Tree : ITree
     {
         IRootNode _root = new RootNode();
 
-        public IDomainNode GetDomain(GraphDomains domain)
+        public IDomainNode GetDomain(Domains domain)
         {
             if (!_root.TryGetNode(domain, out var node))
                 node = _root.AddNode(new DomainNode(domain));
