@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Threading.Tasks;
 using UnityEngine;
 using ViConsole.Attributes;
+using ViConsole.Extensions;
 using ViConsole.Parsing;
 using ViConsole.Tree;
 
@@ -27,6 +28,7 @@ namespace ViConsole
         {
             _addMessage = addMessage;
             await Task.Run(DiscoverCommands);
+            _addMessage("Console initialized", LogType.Log);
         }
 
         public object ExecuteCommand(IEnumerable<Token> tokens)
@@ -66,7 +68,7 @@ namespace ViConsole
                                 throw new CommandException($"Expected {command.Parameters.Length} parameters for command", token);
                             args[i] = operandStack.Pop();
                             if (command.Parameters[i].Type.IsEnum)
-                                if (!Enum.TryParse(command.Parameters[i].Type, args[i].ToString(), out args[i]))
+                                if (!Enum.TryParse(command.Parameters[i].Type, args[i].ToString(), ignoreCase: true, out args[i]))
                                     throw new CommandException($"Invalid value for parameter '{command.Parameters[i].Name}' in command", token);
                             if (!command.Parameters[i].Type.IsInstanceOfType(args[i]))
                                 throw new CommandException($"Invalid value for parameter '{command.Parameters[i].Name}' in command", token);
@@ -133,27 +135,23 @@ namespace ViConsole
 
         [Command("false", isBuiltIn: true, hide: true)]
         public static bool False() => false;
-        
+
         [Command("null", isBuiltIn: true, hide: true)]
         public static object Null() => null;
 
         [Command("ls", "List all commands", isBuiltIn: true)]
-        private int PrintAllCommands(bool test)
+        private void PrintAllCommands()
         {
-            int count = 0;
             var commands = ViConsole.Instance.CommandTree.GetDomain(Domains.Commands);
+            _addMessage("Available commands:".Decorate(StringDecoration.Italic), LogType.Log);
             if (commands.IsEnabled)
             {
                 foreach (var command in commands.OfType<ICommandNode>())
                 {
-                    if (test && command.Name == "ls") continue;
                     if (command.Attribute.Hide) continue;
-                    count++;
-                    Debug.Log(command.GetHelpText());
+                    _addMessage(command.GetHelpText(), LogType.Log);
                 }
             }
-
-            return count;
         }
 
         [Command("__builtin_index", isBuiltIn: true, hide: true)]
@@ -168,30 +166,67 @@ namespace ViConsole
         [Command("__builtin_concat", isBuiltIn: true, hide: true)]
         private static object Concatenate(object a, object b) => a.ToString() + b.ToString();
 
-        [Command("echo", isBuiltIn:true)]
-        private string Print(object obj)
-        {
-            var str = obj.ToString();
-            _addMessage($"'{str}'", LogType.Log);
-            return str;
-        }
+        [Command("echo", "Print result", isBuiltIn: true)]
+        private void Print(object obj) => _addMessage($"'{obj.ToString()}'", LogType.Log);
 
         [Command("var", "Save named variable", isBuiltIn: true)]
         private void SetVar(string name, object value)
         {
             var vars = CommandTree.GetDomain(Domains.Variables);
             vars.RegisterVariable(name, value);
+            _addMessage($"${name} = '{value}'", LogType.Log);
         }
-        
-        
+
+
         [Command("lsvar", "List saved variables", isBuiltIn: true)]
         private void GetVars()
         {
             var vars = CommandTree.GetDomain(Domains.Variables);
             foreach (var variable in vars.OfType<IVariableNode>())
             {
-                _addMessage(variable.Name, LogType.Log);
+                _addMessage($"${variable.Name} = ${variable.Value.ToString()}", LogType.Log);
             }
+        }
+
+        [Command("types", "Find types by name", isBuiltIn: true)]
+        private List<Type> FindType(string name)
+        {
+            return AppDomain.CurrentDomain.GetAssemblies()
+                .Select(a => a?.GetTypes().FirstOrDefault(t => string.Equals(t.Name, "Camera", StringComparison.OrdinalIgnoreCase)))
+                .Where(x => x != null)
+                .ToList();
+        }
+
+        [Command("find", "Find object in hierarchy by Name, Tag or component Type", isBuiltIn: true)]
+        private object GetObject(FindByTypes type, object value)
+        {
+            switch (type)
+            {
+                case FindByTypes.Name:
+                {
+                    var name = value as string;
+                    if (string.IsNullOrEmpty(name))
+                        throw new CommandException("Invalid name");
+                    return GameObject.Find(name);
+                }
+                case FindByTypes.Tag:
+                {
+                    var name = value as string;
+                    if (string.IsNullOrEmpty(name))
+                        throw new CommandException("Invalid name");
+                    return GameObject.FindWithTag(name);
+                }
+                case FindByTypes.Type:
+                {
+                    var monoType = value as Type;
+                    if (monoType == null)
+                        throw new CommandException("Invalid type");
+                    return GameObject.FindFirstObjectByType(monoType);
+                }
+            }
+
+            _addMessage("No object found", LogType.Warning);
+            return null;
         }
 
         #endregion

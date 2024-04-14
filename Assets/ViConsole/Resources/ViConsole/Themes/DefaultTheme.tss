@@ -6,10 +6,69 @@
     left: 0;
     right: 0;
     background-color: var(--background-color);
+    color: var(--primary-color);
+    font-size: var(--font-size);
 
-    
+    --unity-colors-scrollbar_thumb-background-hover: var(--scrollbar-color-handle-hover);
+}
+
+.main-frame .unity-collection-view__item--alternative-background {
+    background-color: var(--secondary-background-color);
+}
+
+.main-frame ListView {
+    flex-grow: 1;
+}
+
+.log-warn {
+    color: var(--color-warning);
+}
+
+.log-error {
+    color: var(--color-error);
+}
+
+.log-exception {
+    color: var(--color-exception);
 }
 
 .wrap {
     white-space: normal;
 }
+
+.console-input {
+    --unity-cursor-color: var(--caret-color);
+}
+
+.console-input > TextInput {
+    background-color: var(--secondary-background-color);
+    color: var(--primary-color);
+    font-size: var(--font-size);
+    border-width: 0;
+
+}
+
+.main-frame Scroller > #unity-low-button,
+.main-frame Scroller > #unity-high-button {
+    background-color: var(--scrollbar-color-handle);
+    border-color: var(--scrollbar-color-handle);
+    -unity-background-image-tint-color: var(--scrollbar-color-background);
+}
+
+.main-frame Scroller .unity-base-slider__tracker {
+    background-color: var(--scrollbar-color-background);
+    border-color: var(--scrollbar-color-background);
+}
+
+.main-frame Scroller .unity-base-slider__dragger {
+    background-color: var(--scrollbar-color-handle);
+    border-width: 0;
+}
+
+/*.main-frame Scroller .unity-base-slider__dragger-border {*/
+/*    border-color: var(--scrollbar-color-handle);*/
+/*}*/
+
+/*.main-frame Scroller .unity-base-slider__dragger-border:focus {*/
+/*    border-color: var(--scrollbar-color-handle);*/
+/*}*/

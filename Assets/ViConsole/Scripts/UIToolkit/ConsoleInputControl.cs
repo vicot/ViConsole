@@ -37,9 +37,11 @@ namespace ViConsole.UIToolkit
             RegisterCallback<KeyDownEvent>(OnKeyDown, TrickleDown.TrickleDown);
             
             _colorizer = new SyntaxColorizer();
-            _colorizer.StyleSheet[LexemeType.Command] = new InputStyle(Color.green, StringDecoration.Bold);
-            _colorizer.StyleSheet[LexemeType.String] = new InputStyle(Color.clear, StringDecoration.Italic);
-            _colorizer.StyleSheet[LexemeType.Identifier] = new InputStyle(Color.red, StringDecoration.Underline);
+        }
+
+        public void SetStyle(InputStyleSheet styleSheet)
+        {
+            _colorizer.StyleSheet = styleSheet;
         }
 
         void OnKeyDown(KeyDownEvent evt)

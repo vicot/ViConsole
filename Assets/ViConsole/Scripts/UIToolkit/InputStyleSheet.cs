@@ -12,7 +12,7 @@ namespace ViConsole.UIToolkit
         public StringDecoration Decoration;
         [FormerlySerializedAs("NoParse")] public bool AddNoParse;
 
-        public InputStyle(Color color, StringDecoration decoration, bool addNoParse = true)
+        public InputStyle(Color color, StringDecoration decoration = StringDecoration.None, bool addNoParse = true)
         {
             Color = color;
             Decoration = decoration;
