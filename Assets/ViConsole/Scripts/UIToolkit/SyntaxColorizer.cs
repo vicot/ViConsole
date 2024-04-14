@@ -61,7 +61,7 @@ namespace ViConsole.UIToolkit
         {
             if (!StyleSheet.TryGetValue(token.Type, out var style)) style = InputStyle.Default;
 
-            var lexeme = token.Lexeme.Value;
+            var lexeme = token.Lexeme.Text;
             var position = token.Lexeme.Position;
 
             int count = 0;
@@ -71,6 +71,8 @@ namespace ViConsole.UIToolkit
                 case LexemeType.Invalid:
                 case LexemeType.Command:
                 case LexemeType.String:
+                case LexemeType.Identifier:
+                case LexemeType.SpecialIdentifier:
                     break;
                 case LexemeType.OpenInline:
                     lexeme = Symbols.InlineStart.ToString();
@@ -83,12 +85,6 @@ namespace ViConsole.UIToolkit
                     break;
                 case LexemeType.CloseIndex:
                     lexeme = Symbols.IndexEnd.ToString();
-                    break;
-                case LexemeType.Identifier:
-                    lexeme = Symbols.Identifier + lexeme;
-                    break;
-                case LexemeType.SpecialIdentifier:
-                    lexeme = Symbols.SpecialIdentifier + lexeme;
                     break;
                 case LexemeType.Concatenation:
                     lexeme = Symbols.Concatenate.ToString();

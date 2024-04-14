@@ -10,6 +10,7 @@ namespace ViConsole.Tree
         ITreeNode AddNode(ITreeNode node);
         ITreeNode GetNode(string name);
         bool TryGetNode(string name, out ITreeNode node);
+        bool RemoveNode(ITreeNode node);
     }
 
     public abstract class TreeNode : ITreeNode
@@ -41,6 +42,8 @@ namespace ViConsole.Tree
             _nodes.Add(node);
             return node;
         }
+        
+        public bool RemoveNode(ITreeNode node) => _nodes.Remove(node);
 
         List<ITreeNode> _nodes = new();
         

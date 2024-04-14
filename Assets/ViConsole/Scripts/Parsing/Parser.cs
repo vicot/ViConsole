@@ -37,11 +37,13 @@ namespace ViConsole.Parsing
                     if (c == Symbols.Identifier)
                     {
                         currentLexeme.Type = LexemeType.Identifier;
+                        currentLexeme.Prefix = c.ToString();
                         // Skip the identifier symbol
                     }
                     else if (c == Symbols.SpecialIdentifier)
                     {
                         currentLexeme.Type = LexemeType.SpecialIdentifier;
+                        currentLexeme.Prefix = c.ToString();
                         // Skip the special identifier symbol
                     }
                     else if (c == Symbols.InlineStart)
@@ -82,6 +84,7 @@ namespace ViConsole.Parsing
                     else if (c == Symbols.String)
                     {
                         currentLexeme.Type = LexemeType.String;
+                        currentLexeme.Prefix = c.ToString();
                         inString = true;
                     }
                     else
@@ -120,6 +123,8 @@ namespace ViConsole.Parsing
                     }
                     else
                     {
+                        if (inString && c == Symbols.String)
+                            currentLexeme.Suffix = c.ToString();
                         lexemes.Add(currentLexeme);
                         currentLexeme = null;
                         if (!inString || c != Symbols.String)
@@ -135,7 +140,7 @@ namespace ViConsole.Parsing
                     lexemes.Add(currentLexeme);
             }
 
-            Print(lexemes);
+            //Print(lexemes);
             return lexemes;
         }
 
@@ -172,7 +177,7 @@ namespace ViConsole.Parsing
 
                     operatorStack.Push(token);
                 }
-                
+
                 if (token.Type is LexemeType.Concatenation)
                 {
                     while (operatorStack.Count > 0 && operatorStack.Peek().Priority > token.Priority
@@ -201,13 +206,13 @@ namespace ViConsole.Parsing
                         output.Add(operatorStack.Pop());
 
                     var indexCommand = operatorStack.Pop();
-                    
+
                     if (indexCommand.Type == LexemeType.OpenIndex)
                     {
                         indexCommand.Type = LexemeType.Command;
                         indexCommand.Lexeme.Value = "__builtin_index";
                     }
-                    
+
                     output.Add(indexCommand);
                 }
             }

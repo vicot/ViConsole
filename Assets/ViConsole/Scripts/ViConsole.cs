@@ -43,7 +43,7 @@ namespace ViConsole
 
         async void Start()
         {
-            await _commandRunner.Initialize();
+            await _commandRunner.Initialize(AddMessage);
             OpenConsole();
             messages.MaxLength = scrollback;
             Application.logMessageReceivedThreaded += OnLogReceived;
@@ -107,19 +107,19 @@ namespace ViConsole
             return label;
         }
 
-        public object ExecuteCommand(IEnumerable<Token> tokens, string rawCommand)
+        public void ExecuteCommand(IEnumerable<Token> tokens, string rawCommand)
         {
             try
             {
-                return _commandRunner.ExecuteCommand(tokens);
+                var result = _commandRunner.ExecuteCommand(tokens);
+                if(result != null)
+                    AddMessage($"'{result}'", LogType.Log);
             }
             catch (CommandException e)
             {
                 AddMessage(rawCommand, LogType.Exception);
                 AddMessage($"{e.Message}", LogType.Exception);
             }
-
-            return null;
         }
 
         

@@ -6,7 +6,13 @@
         public string Value { get; set; }
         public int Position { get; set; }
 
-        public bool Empty => Value.Length == 0;
+        public string Prefix { get; set; }
+        
+        public string Suffix { get; set; }
+
+        public string Text => Prefix + Value + Suffix;
+
+        public bool Empty => Text.Length == 0;
         
         public Lexeme(int position) : this(position, LexemeType.Invalid)
         {

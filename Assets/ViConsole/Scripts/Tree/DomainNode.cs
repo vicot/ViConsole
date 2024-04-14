@@ -30,8 +30,17 @@ namespace ViConsole.Tree
         
         public void RegisterVariable(string name, object value)
         {
-            var node = new VariableNode(name, value);
-            AddNode(node);
+            if (TryGetVariable(name, out var node))
+            {
+                //if (value == null) RemoveNode(node);
+                node.Value = value;
+            }
+            else
+            {
+                //if (value != null)
+                node = new VariableNode(name, value);
+                AddNode(node);
+            }
         }
         
         public bool TryGetVariable(string name, out IVariableNode commandNode) => TryGet(name, out commandNode);

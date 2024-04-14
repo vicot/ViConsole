@@ -13,17 +13,19 @@ namespace ViConsole
 {
     public interface ICommandRunner
     {
-        Task Initialize();
+        Task Initialize(Action<string, LogType> addMessage);
         object ExecuteCommand(IEnumerable<Token> tokens);
         Tree.Tree CommandTree { get; }
     }
 
     public class CommandRunner : ICommandRunner
     {
+        Action<string, LogType> _addMessage;
         public Tree.Tree CommandTree { get; } = new();
 
-        public async Task Initialize()
+        public async Task Initialize(Action<string, LogType> addMessage)
         {
+            _addMessage = addMessage;
             await Task.Run(DiscoverCommands);
         }
 
@@ -131,6 +133,9 @@ namespace ViConsole
 
         [Command("false", isBuiltIn: true, hide: true)]
         public static bool False() => false;
+        
+        [Command("null", isBuiltIn: true, hide: true)]
+        public static object Null() => null;
 
         [Command("ls", "List all commands", isBuiltIn: true)]
         private int PrintAllCommands(bool test)
@@ -142,6 +147,7 @@ namespace ViConsole
                 foreach (var command in commands.OfType<ICommandNode>())
                 {
                     if (test && command.Name == "ls") continue;
+                    if (command.Attribute.Hide) continue;
                     count++;
                     Debug.Log(command.GetHelpText());
                 }
@@ -150,7 +156,7 @@ namespace ViConsole
             return count;
         }
 
-        [Command("__builtin_index", isBuiltIn:true, hide:true)]
+        [Command("__builtin_index", isBuiltIn: true, hide: true)]
         private static object Index(object obj, int index)
         {
             if (obj is IList list)
@@ -158,9 +164,35 @@ namespace ViConsole
             else throw new CommandException("Index can only be used on lists");
         }
 
-        
-        [Command("__builtin_concat", isBuiltIn:true, hide:true)]
+
+        [Command("__builtin_concat", isBuiltIn: true, hide: true)]
         private static object Concatenate(object a, object b) => a.ToString() + b.ToString();
+
+        [Command("echo", isBuiltIn:true)]
+        private string Print(object obj)
+        {
+            var str = obj.ToString();
+            _addMessage($"'{str}'", LogType.Log);
+            return str;
+        }
+
+        [Command("var", "Save named variable", isBuiltIn: true)]
+        private void SetVar(string name, object value)
+        {
+            var vars = CommandTree.GetDomain(Domains.Variables);
+            vars.RegisterVariable(name, value);
+        }
+        
+        
+        [Command("lsvar", "List saved variables", isBuiltIn: true)]
+        private void GetVars()
+        {
+            var vars = CommandTree.GetDomain(Domains.Variables);
+            foreach (var variable in vars.OfType<IVariableNode>())
+            {
+                _addMessage(variable.Name, LogType.Log);
+            }
+        }
 
         #endregion
     }
