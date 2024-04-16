@@ -89,6 +89,9 @@ namespace ViConsole.UIToolkit
                 case LexemeType.Concatenation:
                     lexeme = Symbols.Concatenate.ToString();
                     break;
+                case LexemeType.GetProperty:
+                    lexeme = Symbols.Property.ToString();
+                    break;
             }
 
             sb.Append(ApplyStyle(style, lexeme, position));

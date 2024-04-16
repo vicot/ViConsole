@@ -57,7 +57,7 @@ namespace ViConsole.UIToolkit
             _commandHistory.Add(_command);
             _commandHistoryIndex = _commandHistory.Count - 1;
 
-            Controller.ExecuteCommand(_tokenizedCommand, _command);
+            Controller.ExecuteCommand(_tokenizedCommand, _command); 
 
             ClearCommand();
 
@@ -213,6 +213,9 @@ namespace ViConsole.UIToolkit
 
         public void NextCommand()
         {
+            if (_commandHistory.Count <= 0)
+                return;
+            
             ClearCommand();
             _commandHistoryIndex = Mathf.Clamp(_commandHistoryIndex, 0, _commandHistory.Count - 1);
             _command = _commandHistory[_commandHistoryIndex++];
@@ -221,6 +224,9 @@ namespace ViConsole.UIToolkit
 
         public void PreviousCommand()
         {
+            if (_commandHistory.Count <= 0)
+                return;
+            
             ClearCommand();
             _commandHistoryIndex = Mathf.Clamp(_commandHistoryIndex, 0, _commandHistory.Count - 1);
             _command = _commandHistory[_commandHistoryIndex--];

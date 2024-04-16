@@ -76,6 +76,12 @@ namespace ViConsole.Parsing
                         lexemes.Add(currentLexeme);
                         currentLexeme = null;
                     }
+                    else if (c == Symbols.Property)
+                    {
+                        currentLexeme.Type = LexemeType.GetProperty;
+                        lexemes.Add(currentLexeme);
+                        currentLexeme = null;
+                    }
                     else if (char.IsLetterOrDigit(c) || c == '_')
                     {
                         currentLexeme.Type = LexemeType.Command;
@@ -98,9 +104,26 @@ namespace ViConsole.Parsing
                     continue;
                 }
 
-                if (currentLexeme.Type is LexemeType.Identifier or LexemeType.SpecialIdentifier or LexemeType.Command)
+                if (currentLexeme.Type is LexemeType.Identifier or LexemeType.Command)
                 {
                     if (char.IsLetterOrDigit(c) || c == '_')
+                    {
+                        currentLexeme.Value += c;
+                    }
+                    else
+                    {
+                        lexemes.Add(currentLexeme);
+                        currentLexeme = null;
+                        i--;
+                    }
+                }
+                else if (currentLexeme.Type is LexemeType.SpecialIdentifier)
+                {
+                    if (char.IsLetterOrDigit(c) || c == '_')
+                    {
+                        currentLexeme.Value += c;
+                    }
+                    else if (c == '$' && currentLexeme.Value.Length == 0)
                     {
                         currentLexeme.Value += c;
                     }
@@ -170,7 +193,7 @@ namespace ViConsole.Parsing
 
                 if (token.Type is LexemeType.Command)
                 {
-                    while (operatorStack.Count > 0 && operatorStack.Peek().Priority > token.Priority
+                    while (operatorStack.Count > 0 && operatorStack.Peek().Priority >= token.Priority
                                                    && operatorStack.Peek().Type != LexemeType.OpenInline
                                                    && operatorStack.Peek().Type != LexemeType.OpenIndex)
                         output.Add(operatorStack.Pop());
@@ -180,12 +203,23 @@ namespace ViConsole.Parsing
 
                 if (token.Type is LexemeType.Concatenation)
                 {
-                    while (operatorStack.Count > 0 && operatorStack.Peek().Priority > token.Priority
+                    while (operatorStack.Count > 0 && operatorStack.Peek().Priority >= token.Priority
                                                    && operatorStack.Peek().Type != LexemeType.OpenInline
                                                    && operatorStack.Peek().Type != LexemeType.OpenIndex)
                         output.Add(operatorStack.Pop());
 
                     var concatCommand = new Token(new Lexeme(token.Lexeme.Position, LexemeType.Command, "__builtin_concat"));
+                    operatorStack.Push(concatCommand);
+                }
+
+                if (token.Type is LexemeType.GetProperty)
+                {
+                    while (operatorStack.Count > 0 && operatorStack.Peek().Priority >= token.Priority
+                                                   && operatorStack.Peek().Type != LexemeType.OpenInline
+                                                   && operatorStack.Peek().Type != LexemeType.OpenIndex)
+                        output.Add(operatorStack.Pop());
+
+                    var concatCommand = new Token(new Lexeme(token.Lexeme.Position, LexemeType.Command, "__builtin_getproperty"));
                     operatorStack.Push(concatCommand);
                 }
 

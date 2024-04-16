@@ -21,7 +21,7 @@ namespace ViConsole
     }
 
     public delegate void AddMessage(string message, LogType level);
-    
+
     public class CommandRunner : ICommandRunner
     {
         AddMessage _addMessage;
@@ -113,7 +113,17 @@ namespace ViConsole
             if (operandStack.Count > 1)
                 throw new CommandException("Invalid command", null);
 
-            return operandStack.Count > 0 ? operandStack.Pop() : null;
+            var operationResult = operandStack.Count > 0 ? operandStack.Pop() : null;
+            CommandTree.GetDomain(Domains.Globals).RegisterVariable("$", operationResult);
+            if (operationResult != null)
+            {
+                if (operationResult is not string && CommandTree.GetDomain(Domains.Presenters).TryGetPresenter(operationResult.GetType(), out var presenter))
+                {
+                    presenter.Execute(new[] { operationResult, _addMessage });
+                }
+            }
+
+            return operationResult;
         }
 
         private void Discover()
@@ -141,7 +151,7 @@ namespace ViConsole
             if (attribute != null)
                 domain.RegisterCommand(method, attribute);
         }
-        
+
         void DiscoverPresenter(IDomainNode domain, MethodInfo method)
         {
             var attribute = method.GetCustomAttribute<PresenterProviderForAttribute>();
@@ -151,6 +161,26 @@ namespace ViConsole
 
         #region builtin presenters
 
+        [PresenterProviderFor(typeof(IEnumerable))]
+        static void EnumerablePresenter(IEnumerable obj, AddMessage addMessage)
+        {
+            int i = 0;
+            foreach (var o in obj)
+            {
+                ++i;
+                
+                if (o == null)
+                {
+                    addMessage($"[{i}] null", LogType.Log);
+                }
+
+                else
+                {
+                    addMessage($"[{i}] {o}", LogType.Log);
+                }
+            }
+        }        
+        
         [PresenterProviderFor(typeof(GameObject))]
         static void GameObjectPresenter(GameObject obj, AddMessage addMessage)
         {
@@ -162,7 +192,7 @@ namespace ViConsole
             addMessage($"Rotation: {obj.transform.rotation}", LogType.Log);
             addMessage($"Scale: {obj.transform.localScale}", LogType.Log);
         }
-        
+
         [PresenterProviderFor(typeof(Component))]
         static void ComponentPresenter(Component obj, AddMessage addMessage)
         {
@@ -171,8 +201,8 @@ namespace ViConsole
             addMessage($"Position: {obj.transform.position}", LogType.Log);
             addMessage($"Rotation: {obj.transform.rotation}", LogType.Log);
             addMessage($"Scale: {obj.transform.localScale}", LogType.Log);
-        }        
-        
+        }
+
         [PresenterProviderFor(typeof(Object))]
         static void UnityObjectPresenter(Object obj, AddMessage addMessage)
         {
@@ -181,19 +211,19 @@ namespace ViConsole
                 GameObjectPresenter(go, addMessage);
                 return;
             }
-            
+
             if (obj is Component comp)
             {
-                ComponentPresenter(comp,addMessage);
+                ComponentPresenter(comp, addMessage);
                 return;
             }
 
-            
+
             addMessage($"Name: {obj.name}", LogType.Log);
         }
 
         #endregion
-        
+
         #region builtin commands
 
         [Command("true", isBuiltIn: true, hide: true)]
@@ -208,7 +238,7 @@ namespace ViConsole
         [Command("ls", "List all commands", isBuiltIn: true)]
         void PrintAllCommands()
         {
-            var commands = ViConsole.Instance.CommandTree.GetDomain(Domains.Commands);
+            var commands = CommandTree.GetDomain(Domains.Commands);
             _addMessage("Available commands:".Decorate(StringDecoration.Italic), LogType.Log);
             if (commands.IsEnabled)
             {
@@ -229,6 +259,30 @@ namespace ViConsole
             if (obj is IList list)
                 return list[i];
             throw new CommandException("Index can only be used on lists");
+        }
+
+
+        [Command("__builtin_getproperty", isBuiltIn: true, hide: true)]
+        static object GetProperty(object obj, object name)
+        {
+            if (name is not string propertyName)
+                throw new CommandException("Property name must be a string");
+
+            var type = obj.GetType();
+
+            foreach (var property in type.GetProperties())
+            {
+                if (string.Equals(property.Name, propertyName))
+                    return property.GetValue(obj);
+            }
+
+            foreach (var field in type.GetFields())
+            {
+                if (string.Equals(field.Name, propertyName))
+                    return field.GetValue(obj);
+            }
+
+            throw new CommandException($"Property '{name}' not found");
         }
 
 
@@ -297,17 +351,71 @@ namespace ViConsole
                 }
                 case FindByTypes.Type:
                 {
-                    var monoType = value as Type;
-                    if (monoType == null)
+                    Type objType;
+                    if (value is string typeName)
+                    {
+                        var matches = FindType(typeName);
+                        if (matches.Count > 1)
+                            throw new CommandException($"Multiple matching types for '{typeName}' found");
+                        if (matches.Count == 0)
+                            throw new CommandException($"No matching types for '{typeName}' found");
+                        objType = matches[0];
+                    }
+                    else objType = value as Type;
+
+                    if (objType == null)
                         throw new CommandException("Invalid type");
-                    return GameObject.FindFirstObjectByType(monoType);
+                    return GameObject.FindFirstObjectByType(objType);
                 }
             }
 
             _addMessage("No object found", LogType.Warning);
             return null;
         }
-        
+
+        [Command("findall", "Find objects in hierarchy by Name (starting with), Tag or component Type", isBuiltIn: true)]
+        object GetObjectAll(FindByTypes type, object value)
+        {
+            switch (type)
+            {
+                case FindByTypes.Name:
+                {
+                    var name = value as string;
+                    if (string.IsNullOrEmpty(name))
+                        throw new CommandException("Invalid name");
+                    return GameObject.FindObjectsByType<GameObject>(FindObjectsInactive.Include, FindObjectsSortMode.None).Where(go => go.name.StartsWith(name)).ToList();
+                }
+                case FindByTypes.Tag:
+                {
+                    var name = value as string;
+                    if (string.IsNullOrEmpty(name))
+                        throw new CommandException("Invalid name");
+                    return GameObject.FindGameObjectsWithTag(name).ToList();
+                }
+                case FindByTypes.Type:
+                {
+                    Type objType;
+                    if (value is string typeName)
+                    {
+                        var matches = FindType(typeName);
+                        if (matches.Count > 1)
+                            throw new CommandException($"Multiple matching types for '{typeName}' found");
+                        if (matches.Count == 0)
+                            throw new CommandException($"No matching types for '{typeName}' found");
+                        objType = matches[0];
+                    }
+                    else objType = value as Type;
+
+                    if (objType == null)
+                        throw new CommandException("Invalid type");
+                    return GameObject.FindObjectsByType(objType, FindObjectsInactive.Include, FindObjectsSortMode.None).ToList();
+                }
+            }
+
+            _addMessage("No object found", LogType.Warning);
+            return null;
+        }
+
         [Command("describe", "Describe object", isBuiltIn: true)]
         void Describe(object obj)
         {
@@ -324,20 +432,13 @@ namespace ViConsole
                 return;
             }
 
-            presenter.Execute(new []{obj, _addMessage});
-
-            var type = obj.GetType();
-            _addMessage($"Type: {type}", LogType.Log);
-            foreach (var property in type.GetProperties())
-            {
-                if (property.GetIndexParameters().Length > 0) continue;
-                _addMessage($"{property.Name}: {property.GetValue(obj)}", LogType.Log);
-            }
-            
-            foreach (var field in type.GetFields())
-            {
-                _addMessage($"{field.Name}: {field.GetValue(obj)}", LogType.Log);
-            }
+            presenter.Execute(new[] { obj, _addMessage });
+        }
+        
+        [Command("getcomponent", "Get component from object", isBuiltIn: true)]
+        object GetComponent(GameObject obj, Type type)
+        {
+            return obj.GetComponent(type);
         }
 
         #endregion

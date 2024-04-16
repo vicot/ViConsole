@@ -9,7 +9,8 @@
         public const char IndexStart = '[';
         public const char IndexEnd = ']';
         public const char Separator = ' ';
-        public const char Concatenate = '.';
+        public const char Concatenate = '+';
+        public const char Property = '.';
         public const char String = '\'';
     }
 }

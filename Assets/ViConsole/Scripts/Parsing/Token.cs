@@ -19,13 +19,14 @@ namespace ViConsole.Parsing
                 LexemeType.Invalid => 0,
                 LexemeType.Command => 1,
                 LexemeType.String => 0,
-                LexemeType.OpenInline => 3,
-                LexemeType.CloseInline => 3,
-                LexemeType.OpenIndex => 2,
-                LexemeType.CloseIndex => 2,
+                LexemeType.OpenInline => 4,
+                LexemeType.CloseInline => 4,
+                LexemeType.OpenIndex => 3,
+                LexemeType.CloseIndex => 3,
                 LexemeType.Identifier => 0,
                 LexemeType.SpecialIdentifier => 0,
                 LexemeType.Concatenation => 1,
+                LexemeType.GetProperty => 1,
                 _ => 0,
             };
         }

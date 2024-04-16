@@ -37,6 +37,7 @@
         CloseIndex,
         Identifier,
         SpecialIdentifier,
-        Concatenation
+        Concatenation,
+        GetProperty
     }
 }

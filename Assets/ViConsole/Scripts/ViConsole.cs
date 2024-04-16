@@ -33,13 +33,13 @@ namespace ViConsole
         [Header("Config")] [SerializeField] int scrollback = 100;
         [SerializeField] InputAction toggleConsoleAction;
 
-        InputAction previousCommandAction;
-        InputAction nextCommandAction;
-        
+        InputAction _previousCommandAction;
+        InputAction _nextCommandAction;
 
-        internal static ViConsole Instance { get; private set; }
 
-        internal Tree.Tree CommandTree => _commandRunner.CommandTree;
+        //internal static ViConsole Instance { get; private set; }
+
+        //internal Tree.Tree CommandTree => _commandRunner.CommandTree;
 
         RingList<MessageEntry> messages = new();
 
@@ -47,38 +47,60 @@ namespace ViConsole
         ListView _listView;
         ConsoleInputControl _inputBox;
         ICommandRunner _commandRunner = new CommandRunner();
+        bool _isOpen = false;
 
-        bool styleSet = false;
+        bool _styleSet = false;
 
         void Awake()
         {
-            if (Instance != null)
-            {
-                Debug.LogWarning("Multiple ViConsole instances detected, destroying the new one.");
-                Destroy(gameObject);
-                return;
-            }
-
-            Instance = this;
+            // if (Instance != null)
+            // {
+            //     Debug.LogWarning("Multiple ViConsole instances detected, destroying the new one.");
+            //     Destroy(gameObject);
+            //     return;
+            // }
+            //
+            // Instance = this;
             DontDestroyOnLoad(gameObject);
-            
-            nextCommandAction = new InputAction("NextCommand", InputActionType.Button, "<Keyboard>/downArrow");
-            previousCommandAction = new InputAction("PreviousCommand", InputActionType.Button, "<Keyboard>/upArrow");
-            nextCommandAction.Enable();
-            nextCommandAction.performed += ctx => _inputBox?.NextCommand();
-            previousCommandAction.Enable();
-            previousCommandAction.performed += ctx => _inputBox?.PreviousCommand();
+
+            _nextCommandAction = new InputAction("NextCommand", InputActionType.Button, "<Keyboard>/downArrow");
+            _previousCommandAction = new InputAction("PreviousCommand", InputActionType.Button, "<Keyboard>/upArrow");
         }
 
         async void Start()
         {
             await _commandRunner.Initialize(AddMessage);
-            OpenConsole();
             messages.MaxLength = scrollback;
             Application.logMessageReceivedThreaded += OnLogReceived;
+
+            _root = doc.rootVisualElement;
+            CloseConsole();
+            _root.RegisterCallback<CustomStyleResolvedEvent>(CustomStylesResolved);
+
+            _listView = _root.Q<ListView>();
+
+            _listView.makeItem = MakeItem;
+            _listView.bindItem = BindItem;
+            _listView.itemsSource = messages;
+
+            _listView.Q<ScrollView>().mouseWheelScrollSize = 10000;
+
+            _inputBox = _root.Q<ConsoleInputControl>();
+            _inputBox.Controller = this;
+            if (!_styleSet)
+            {
+                ApplyCustomStyle(_root.customStyle);
+                _inputBox.SetStyle(styleSheet);
+                _styleSet = true;
+            }
+
         }
 
-        void OnLogReceived(string message, string stacktrace, LogType type) => AddMessage($"[{type.ToString()}] {message}", type);
+        void OnLogReceived(string message, string stacktrace, LogType type)
+        {
+            var timestamp = $"[{DateTime.Now:HH:mm:ss}]".Colorize(Color.gray);
+            AddMessage($" [{type.ToString()}] {message}", type);
+        }
 
         void AddMessage(string message, LogType level = LogType.Log)
         {
@@ -95,33 +117,47 @@ namespace ViConsole
             });
         }
 
-        [ContextMenu("Open Console")]
-        public async void OpenConsole()
+        void OnEnable()
         {
-            _root = doc.rootVisualElement;
-            _root.RegisterCallback<CustomStyleResolvedEvent>(CustomStylesResolved);
-            //var c = root.customStyle.TryGetValue(new CustomStyleProperty<Color>("--background-color"), out var color);
-            //Debug.Log(c);
-            //Debug.Log(color);
-
-            _listView = _root.Q<ListView>();
-
-            _listView.makeItem = MakeItem;
-            _listView.bindItem = BindItem;
-            //_listView.unbindItem = UnbindItem;
-            _listView.itemsSource = messages;
-
-            _listView.Q<ScrollView>().mouseWheelScrollSize = 10000;
-
-            _inputBox = _root.Q<ConsoleInputControl>();
-            _inputBox.Controller = this;
-            if (!styleSet)
-            {
-                ApplyCustomStyle(_root.customStyle);
-                _inputBox.SetStyle(styleSheet);
-                styleSet = true;
-            }
+            toggleConsoleAction.Enable();
+            toggleConsoleAction.performed += OnToggleConsole;
         }
+
+        void OnDisable()
+        {
+            CloseConsole();
+        }
+
+        public void OpenConsole()
+        {
+            _nextCommandAction.Enable();
+            _nextCommandAction.performed += OnHistoryNext;
+            _previousCommandAction.Enable();
+            _previousCommandAction.performed += OnHistoryPrev;
+            _root.style.visibility = new StyleEnum<Visibility>(Visibility.Visible);
+            _isOpen = true;
+            _inputBox?.SetFocus();
+        }
+
+        public void CloseConsole()
+        {
+            _nextCommandAction.Disable();
+            _nextCommandAction.performed -= OnHistoryNext;
+            _previousCommandAction.Disable();
+            _previousCommandAction.performed -= OnHistoryPrev;
+            _root.style.visibility = new StyleEnum<Visibility>(Visibility.Hidden);
+            _isOpen = false;
+        }
+
+        void OnToggleConsole(InputAction.CallbackContext obj)
+        {
+            if (_isOpen)
+                CloseConsole();
+            else OpenConsole();
+        }
+
+        void OnHistoryNext(InputAction.CallbackContext obj) => _inputBox?.NextCommand(); 
+        void OnHistoryPrev(InputAction.CallbackContext obj) => _inputBox?.PreviousCommand(); 
 
         void CustomStylesResolved(CustomStyleResolvedEvent evt)
         {
@@ -136,7 +172,7 @@ namespace ViConsole
             {
                 logStyles[LogType.Log] = new InputStyle(color, addNoParse: false);
             }
-            
+
             if (style.TryGetValue(_propertyColorLiterals, out color))
             {
                 styleSheet[LexemeType.String] = new InputStyle(color, StringDecoration.Italic);
@@ -152,7 +188,7 @@ namespace ViConsole
                 styleSheet[LexemeType.Identifier] = new InputStyle(color);
                 styleSheet[LexemeType.SpecialIdentifier] = new InputStyle(color);
             }
-            
+
             if (style.TryGetValue(_propertyColorOperator, out color))
             {
                 styleSheet[LexemeType.Concatenation] = new InputStyle(color);
@@ -181,13 +217,13 @@ namespace ViConsole
             if (_inputBox != null)
             {
                 _inputBox.SetStyle(styleSheet);
-                styleSet = true;
+                _styleSet = true;
             }
             else
             {
                 var inputBox = _root.Q<ConsoleInputControl>();
                 inputBox?.SetStyle(styleSheet);
-                styleSet = true;
+                _styleSet = true;
             }
         }
 
