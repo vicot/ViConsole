@@ -1,4 +1,7 @@
-﻿using System.Text.RegularExpressions;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text.RegularExpressions;
 using UnityEngine;
 using ViConsole.Attributes;
 
@@ -7,18 +10,19 @@ namespace ViConsole
     public class Tester : MonoBehaviour
     {
         [Command("cube")]
-        public void Help(object hexString)
+        public void ColorCube(string hex)
         {
-            if(hexString is not string hex || !Regex.IsMatch(hex, @"^[0-9A-Fa-f]{6}$"))
+            if(!Regex.IsMatch(hex, @"^[0-9A-Fa-f]{6}$"))
             {
                 Debug.LogError("Invalid hex string");
                 return;
             }
             
-            Color color = HexToColor(hexString.ToString());
+            Color color = HexToColor(hex);
             GetComponent<Renderer>().material.color = color;
             Debug.Log("Changed color");
         }
+
         
         public static Color HexToColor(string hex)
         {

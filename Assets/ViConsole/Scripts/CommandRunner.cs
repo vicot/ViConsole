@@ -18,7 +18,7 @@ namespace ViConsole
         Task Initialize(AddMessage addMessage);
         object ExecuteCommand(IEnumerable<Token> tokens);
         Tree.Tree CommandTree { get; }
-        (ICommandNode command, int currentArgument) SimulateExecution(List<Token> tokens, int cursorPosition);
+        (ICommandNode command, int currentArgument) SimulateExecution(List<Token> tokens, int cursorPosition, out Token insideToken);
     }
 
     public delegate void AddMessage(string message, LogType level);
@@ -84,9 +84,6 @@ namespace ViConsole
                                     args[i] = value; //revert
                             }
 
-                            // if (command.Parameters[i].Type.IsEnum)
-                            //     if (!Enum.TryParse(command.Parameters[i].Type, args[i].ToString(), ignoreCase: true, out args[i]))
-                            //         throw new CommandException($"Invalid value for parameter '{command.Parameters[i].Name}' in command", token);
                             if (!command.Parameters[i].Type.IsInstanceOfType(args[i]))
                                 throw new CommandException($"Invalid value '{value}' for parameter '{command.Parameters[i].Name}' in command", token);
                         }
@@ -185,13 +182,13 @@ namespace ViConsole
                 domain.RegisterConverter(method, attribute);
         }
 
-        public (ICommandNode command, int currentArgument) SimulateExecution(List<Token> tokens, int cursorPosition)
+        public (ICommandNode command, int currentArgument) SimulateExecution(List<Token> tokens, int cursorPosition, out Token insideToken)
         {
+            insideToken = null;
             var postfix = Parser.ConvertToPostfix(tokens);
             if (postfix == null) return (null, 0);
             var operandStack = new Stack<object>();
 
-            Token insideToken = null;
             foreach (var token in tokens)
             {
                 if (token.Lexeme.Position > cursorPosition)
@@ -348,16 +345,10 @@ namespace ViConsole
 
         #region builtin commands
 
-        [Command("true", isBuiltIn: true, hide: true)]
-        static bool True() => true;
-
-        [Command("false", isBuiltIn: true, hide: true)]
-        static bool False() => false;
-
         [Command("null", isBuiltIn: true, hide: true)]
         static object Null() => null;
 
-        [Command("ls", "List all commands", isBuiltIn: true)]
+        [Command("help", "List all commands", isBuiltIn: true)]
         void PrintAllCommands()
         {
             var commands = CommandTree.GetDomain(Domains.Commands);
@@ -373,13 +364,10 @@ namespace ViConsole
         }
 
         [Command("__builtin_index", isBuiltIn: true, hide: true)]
-        static object Index(object obj, object index)
+        static object Index(object obj, int index)
         {
-            if (!Int32.TryParse(index.ToString(), out var i))
-                throw new CommandException("Index must be an integer");
-
             if (obj is IList list)
-                return list[i];
+                return list[index];
             throw new CommandException("Index can only be used on lists");
         }
 
@@ -414,7 +402,7 @@ namespace ViConsole
         [Command("echo", "Print result", isBuiltIn: true)]
         void Print(object obj) => _addMessage($"'{obj.ToString()}'", LogType.Log);
 
-        [Command("var", "Save named variable", isBuiltIn: true)]
+        [Command("setvar", "Save named variable", isBuiltIn: true)]
         void SetVar(string name, object value)
         {
             var vars = CommandTree.GetDomain(Domains.Variables);
@@ -423,7 +411,7 @@ namespace ViConsole
         }
 
 
-        [Command("lsvar", "List saved variables", isBuiltIn: true)]
+        [Command("getvars", "List saved variables", isBuiltIn: true)]
         void GetVars()
         {
             var vars = CommandTree.GetDomain(Domains.Variables);
@@ -587,6 +575,40 @@ namespace ViConsole
         [ValueConverter(typeof(Enum))]
         static bool ConvertToEnum(string value, out object result, Type targetType) => Enum.TryParse(targetType, value, ignoreCase: true, out result);
 
+        [ValueConverter(typeof(int))]
+        static bool ConvertToInt(string value, out int result) => int.TryParse(value, out result);
+        
+        [ValueConverter(typeof(float))]
+        static bool ConvertToFloat(string value, out float result) => float.TryParse(value, out result);
+        
+        [ValueConverter(typeof(double))]
+        static bool ConvertToDouble(string value, out double result) => double.TryParse(value, out result);
+        
+        [ValueConverter(typeof(bool))]
+        static bool ConvertToBool(string value, out bool result) => bool.TryParse(value, out result);
+        
+        [ValueConverter(typeof(string), typeof(object))]
+        static bool ConvertToString(object value, out string result)
+        {
+            result = value.ToString();
+            return true;
+        }
+        
+        [ValueConverter(typeof(float), typeof(int))]
+        static bool ConvertFloatToInt(float value, out int result)
+        {
+            result = (int)value;
+            return true;
+        }
+        
+        [ValueConverter(typeof(int), typeof(float))]
+        static bool ConvertIntToFloat(int value, out float result)
+        {
+            result = value;
+            return true;
+        }
+        
+        
         #endregion
     }
 }

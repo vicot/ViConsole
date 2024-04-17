@@ -178,7 +178,7 @@ namespace ViConsole.Parsing
                 {
                     lexeme.Type = LexemeType.String;
                 }
-                
+
                 tokens.Add(new Token(lexeme));
                 firstToken = lexeme.Type == LexemeType.OpenInline;
             }
@@ -239,15 +239,23 @@ namespace ViConsole.Parsing
                     while (operatorStack.Count > 0 && operatorStack.Peek().Type != LexemeType.OpenInline)
                         output.Add(operatorStack.Pop());
 
-                    operatorStack.Pop();
+                    if (operatorStack.Count > 0)
+                        operatorStack.Pop();
+                    else
+                        return null;
                 }
 
                 if (token.Type is LexemeType.CloseIndex)
                 {
-                    while (operatorStack.Count > 0 && operatorStack.Peek().Type != LexemeType.OpenIndex)
+                    while (operatorStack.Count > 0 && operatorStack.Peek().Lexeme.Type != LexemeType.OpenIndex)
                         output.Add(operatorStack.Pop());
 
-                    var indexCommand = operatorStack.Pop();
+                    Token indexCommand;
+                    if (operatorStack.Count > 0)
+                        indexCommand = operatorStack.Pop();
+                    else
+                        return null;
+
 
                     if (indexCommand.Type == LexemeType.OpenIndex)
                     {

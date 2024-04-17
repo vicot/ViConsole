@@ -4,10 +4,7 @@
         <engine:ListView selection-type="None" allow-add="false" allow-remove="false" show-alternating-row-backgrounds="ContentOnly" virtualization-method="DynamicHeight" />
         <engine:VisualElement style="flex-grow: 0; top: 0; left: 0; bottom: 0; right: 0; flex-direction: column-reverse; display: flex;">
             <engine:VisualElement style="flex-grow: 1; position: absolute; background-color: rgba(0, 0, 0, 0.56); flex-direction: column; justify-content: space-between; right: auto; left: auto; top: auto; bottom: auto; -unity-text-align: upper-left; flex-wrap: nowrap;">
-                <engine:VisualElement style="flex-grow: 1; display: none;">
-                    <engine:Label text="Label" />
-                </engine:VisualElement>
-                <engine:ListView name="autocomplete-hints" style="display: flex;" />
+                <engine:ListView name="autocomplete-hints" style="display: flex; min-height: auto;" />
             </engine:VisualElement>
         </engine:VisualElement>
         <ViConsole.UIToolkit.ConsoleInputControl placeholder-text="Enter command..." hide-placeholder-on-focus="true" label="&gt;" class="console-input" />

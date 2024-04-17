@@ -5,6 +5,7 @@ using UnityEngine;
 using UnityEngine.UIElements;
 using ViConsole.Extensions;
 using ViConsole.Parsing;
+using ViConsole.Tree;
 
 namespace ViConsole.UIToolkit
 {
@@ -31,6 +32,8 @@ namespace ViConsole.UIToolkit
         List<Token> _tokenizedCommand;
         Dictionary<int, int> _indexReMap => _colorizer.IndexReMap;
         List<string> _autocompleteHints = new();
+        Token _insideToken;
+        bool _ignoreOnce = false;
 
         public ViConsole Controller { get; set; }
         public ICommandRunner CommandRunner { get; set; }
@@ -48,9 +51,6 @@ namespace ViConsole.UIToolkit
 
             _colorizer = new SyntaxColorizer();
 
-            _autocompleteHints.Add("test1");
-            _autocompleteHints.Add("test2");
-            _autocompleteHints.Add("test3");
             RefreshHints();
         }
 
@@ -65,8 +65,9 @@ namespace ViConsole.UIToolkit
             _syntaxHint = panel.visualTree.Q<Label>("syntax-hint");
             _autocompleteListView = panel.visualTree.Q<ListView>("autocomplete-hints");
             _autocompleteListView.makeItem = () => new Label().WithClassName("autocomplete-hint");
-            _autocompleteListView.bindItem = (element, i) => (element as Label).text = _autocompleteHints[i];
+            _autocompleteListView.bindItem = (element, i) => ((Label)element).text = _autocompleteHints[i];
             _autocompleteListView.itemsSource = _autocompleteHints;
+            _autocompleteListView.style.display = DisplayStyle.None;
         }
 
         void RefreshHints()
@@ -85,15 +86,41 @@ namespace ViConsole.UIToolkit
 
         void OnKeyDown(KeyDownEvent evt)
         {
-            if (evt.keyCode is not (KeyCode.Return or KeyCode.KeypadEnter))
+            if (evt.keyCode is not (KeyCode.Return or KeyCode.KeypadEnter or KeyCode.Tab))
                 return;
 
-            _commandHistory.Add(_command);
-            _commandHistoryIndex = _commandHistory.Count - 1;
+            if (evt.keyCode is KeyCode.Return or KeyCode.KeypadEnter)
+            {
+                _commandHistory.Add(_command);
+                _commandHistoryIndex = _commandHistory.Count - 1;
 
-            Controller.ExecuteCommand(_tokenizedCommand, _command, _taggedCommand);
+                Controller.ExecuteCommand(_tokenizedCommand, _command, _taggedCommand);
 
-            ClearCommand();
+                ClearCommand();
+            }
+            else if (evt.keyCode == KeyCode.Tab)
+            {
+                if (_autocompleteHints.Count > 0)
+                {
+                    var hint = _autocompleteHints[0];
+                    var pos = _insideToken.Lexeme.Position;
+ 
+                    _command = _command.Remove(pos, _insideToken.Lexeme.Value.Length);
+                    _command = _command.Insert(pos, hint);
+                    // _tokenizedCommand = Parser.Tokenize(Parser.Parse(_command));
+                    // _taggedCommand = _colorizer.ColorizeSyntax(_command, _tokenizedCommand);
+                    // SetValueWithoutNotify(_taggedCommand);
+                    _ignoreOnce = true;
+                    ShowCommand();
+                    
+                    schedule.Execute(() =>
+                    {
+                        _lastCursorIndex = _lastSelectIndex = pos + hint.Length;
+                        Debug.Log($"Set? {_lastCursorIndex}, {_lastSelectIndex}");
+                        SelectRange(_lastCursorIndex, _lastSelectIndex);
+                    });
+                }
+            }
 
             focusController.IgnoreEvent(evt);
             evt.StopImmediatePropagation();
@@ -121,9 +148,14 @@ namespace ViConsole.UIToolkit
         {
             _lastCursorIndex = cursorIndex;
             _lastSelectIndex = selectIndex;
+            
+            Debug.Log($"Cursor: {cursorIndex}, Select: {selectIndex}");
 
-            var (cmd, pos) = CommandRunner?.SimulateExecution(_tokenizedCommand, cursorIndex) ?? (null, 0);
-            if (cmd != null)
+            var (cmd, pos) = CommandRunner?.SimulateExecution(_tokenizedCommand, _lastCursorIndex, out _insideToken) ?? (null, 0);
+
+            HandleAutocomplete(cmd, pos, _insideToken);
+
+            if (cmd != null && !cmd.Attribute.Hide)
             {
                 _syntaxHint?.schedule.Execute(() =>
                 {
@@ -141,8 +173,36 @@ namespace ViConsole.UIToolkit
             }
         }
 
+        void HandleAutocomplete(ICommandNode cmd, int pos, Token token)
+        {
+            List<string> hints = new();
+            if (token != null && token.Lexeme.Type == LexemeType.Command)
+            {
+                hints = CommandRunner.CommandTree.GetDomain(Domains.Commands).Nodes
+                    .OfType<ICommandNode>()
+                    .Select(c => c.Name)
+                    .Where(n => n.FuzzyContains(token.Lexeme.Value))
+                    .Take(5)
+                    .ToList();
+            }
+
+            _autocompleteHints = hints;
+            _autocompleteListView?.schedule.Execute(() =>
+            {
+                _autocompleteListView.itemsSource = _autocompleteHints;
+                _autocompleteListView.style.display = _autocompleteHints.Count > 0 ? DisplayStyle.Flex : DisplayStyle.None;
+                _autocompleteListView.RefreshItems();
+            });
+        }
+
         void OnValueChanged(ChangeEvent<string> args)
         {
+            if (_ignoreOnce)
+            {
+                _ignoreOnce = false;
+                return;
+            }
+
             _commandHistoryIndex = _commandHistory.Count - 1;
             var lastStart = _lastSelectIndex;
             var lastEnd = _lastCursorIndex;
