@@ -16,6 +16,7 @@ namespace ViConsole.Tree
         MethodInfo Method { get; }
         object Execute(object[] args);
         object Execute(object target, object[] args);
+        IEnumerable<string> GetSuggestionsFor(Parameter parameter, object target);
     }
 
     public delegate IEnumerable<string> AutocompleteProvider(object target);
@@ -60,10 +61,30 @@ namespace ViConsole.Tree
 
                     continue;
                 }
+                
+                // todo make into attribute methods
+                if (parameterInfo.ParameterType == typeof(bool))
+                {
+                    ParameterAutocomplete[Parameters[i]] = _ => new[] { "true", "false" };
+                    continue;
+                }
+                
+                if (parameterInfo.ParameterType == typeof(Type))
+                {
+                    ParameterAutocomplete[Parameters[i]] = _ =>
+                    {
+                        var root = Root;
+                        if (root == null || !root.TryGetNode(Domains.Types, out var types)) return Enumerable.Empty<string>();
+                        return types.Nodes.OfType<ITypeNode>().Select(n => n.Type.Name);
+                    };
+                    
+                    continue;
+                }
 
                 if (parameterInfo.ParameterType.IsEnum)
                 {
                     ParameterAutocomplete[Parameters[i]] = _ => Enum.GetNames(parameterInfo.ParameterType);
+                    continue;
                 }
             }
         }

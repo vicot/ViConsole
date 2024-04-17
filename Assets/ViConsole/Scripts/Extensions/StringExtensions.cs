@@ -19,12 +19,12 @@ namespace ViConsole.Extensions
             } while (index != -1);
         }
 
-        public static bool FuzzyContains(this string text, string pattern)
+        public static bool FuzzyContains(this string text, string pattern, StringComparison comparisonType = StringComparison.OrdinalIgnoreCase)
         {
             var i = -1;
             foreach (var letter in pattern)
             {
-                i = text.IndexOf(letter, i + 1);
+                i = text.IndexOf(letter.ToString(), i + 1, comparisonType);
                 if (i < 0) return false;
             }
 

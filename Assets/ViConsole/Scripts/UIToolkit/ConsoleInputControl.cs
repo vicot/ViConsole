@@ -104,19 +104,15 @@ namespace ViConsole.UIToolkit
                 {
                     var hint = _autocompleteHints[0];
                     var pos = _insideToken.Lexeme.Position;
- 
+
                     _command = _command.Remove(pos, _insideToken.Lexeme.Value.Length);
                     _command = _command.Insert(pos, hint);
-                    // _tokenizedCommand = Parser.Tokenize(Parser.Parse(_command));
-                    // _taggedCommand = _colorizer.ColorizeSyntax(_command, _tokenizedCommand);
-                    // SetValueWithoutNotify(_taggedCommand);
                     _ignoreOnce = true;
                     ShowCommand();
-                    
+
                     schedule.Execute(() =>
                     {
                         _lastCursorIndex = _lastSelectIndex = pos + hint.Length;
-                        Debug.Log($"Set? {_lastCursorIndex}, {_lastSelectIndex}");
                         SelectRange(_lastCursorIndex, _lastSelectIndex);
                     });
                 }
@@ -146,10 +142,17 @@ namespace ViConsole.UIToolkit
 
         void OnGenerateVisualContent(MeshGenerationContext obj)
         {
+            if (_ignoreOnce)
+            {
+                _ignoreOnce = false;
+                return;
+            }
+
             _lastCursorIndex = cursorIndex;
             _lastSelectIndex = selectIndex;
-            
-            Debug.Log($"Cursor: {cursorIndex}, Select: {selectIndex}");
+
+            // Debug.Log($"Cursor: {cursorIndex}, Select: {selectIndex}");
+            // Debug.Log($"Command: {_command}");
 
             var (cmd, pos) = CommandRunner?.SimulateExecution(_tokenizedCommand, _lastCursorIndex, out _insideToken) ?? (null, 0);
 
@@ -175,18 +178,24 @@ namespace ViConsole.UIToolkit
 
         void HandleAutocomplete(ICommandNode cmd, int pos, Token token)
         {
-            List<string> hints = new();
+            IEnumerable<string> hints = new List<string>();
             if (token != null && token.Lexeme.Type == LexemeType.Command)
             {
                 hints = CommandRunner.CommandTree.GetDomain(Domains.Commands).Nodes
                     .OfType<ICommandNode>()
-                    .Select(c => c.Name)
-                    .Where(n => n.FuzzyContains(token.Lexeme.Value))
-                    .Take(5)
-                    .ToList();
+                    .Select(c => c.Name);
+            }
+            else if (cmd != null)
+            {
+                var parameter = cmd.Parameters[pos - 1];
+                hints = cmd.GetSuggestionsFor(parameter, null);
             }
 
-            _autocompleteHints = hints;
+            _autocompleteHints = hints
+                .Where(n => n.FuzzyContains(token.Lexeme.Value))
+                .Take(5)
+                .ToList();
+            ;
             _autocompleteListView?.schedule.Execute(() =>
             {
                 _autocompleteListView.itemsSource = _autocompleteHints;
@@ -197,12 +206,6 @@ namespace ViConsole.UIToolkit
 
         void OnValueChanged(ChangeEvent<string> args)
         {
-            if (_ignoreOnce)
-            {
-                _ignoreOnce = false;
-                return;
-            }
-
             _commandHistoryIndex = _commandHistory.Count - 1;
             var lastStart = _lastSelectIndex;
             var lastEnd = _lastCursorIndex;
