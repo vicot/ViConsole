@@ -2,12 +2,17 @@
     <Style src="project://database/Assets/ViConsole/Resources/ViConsole/Themes/DefaultTheme.tss?fileID=-4733365628477956816&amp;guid=934316290e0246c489f9c2942d7787c0&amp;type=3#DefaultTheme" />
     <engine:VisualElement name="ConsoleFrame" class="main-frame" style="bottom: auto;">
         <engine:ListView selection-type="None" allow-add="false" allow-remove="false" show-alternating-row-backgrounds="ContentOnly" virtualization-method="DynamicHeight" />
-        <ViConsole.UIToolkit.ConsoleInputControl placeholder-text="Enter command..." hide-placeholder-on-focus="true" class="console-input" />
-        <engine:VisualElement style="flex-grow: 0; top: 0; left: 0; bottom: 0; right: 0; flex-direction: column; display: flex;">
-            <engine:VisualElement name="VisualElement" style="flex-grow: 1; position: absolute; background-color: rgba(0, 0, 0, 0.56); flex-direction: column; justify-content: space-between; right: auto; left: auto; top: auto; bottom: auto;">
-                <engine:Label text="Label" name="syntax-hint" style="color: rgb(255, 255, 255); top: 0; left: 0; right: 0; bottom: 0;" />
-                <engine:VisualElement name="autocomplete-hints" style="flex-grow: 1;" />
+        <engine:VisualElement style="flex-grow: 0; top: 0; left: 0; bottom: 0; right: 0; flex-direction: column-reverse; display: flex;">
+            <engine:VisualElement style="flex-grow: 1; position: absolute; background-color: rgba(0, 0, 0, 0.56); flex-direction: column; justify-content: space-between; right: auto; left: auto; top: auto; bottom: auto; -unity-text-align: upper-left; flex-wrap: nowrap;">
+                <engine:VisualElement style="flex-grow: 1; display: none;">
+                    <engine:Label text="Label" />
+                </engine:VisualElement>
+                <engine:ListView name="autocomplete-hints" style="display: flex;" />
             </engine:VisualElement>
+        </engine:VisualElement>
+        <ViConsole.UIToolkit.ConsoleInputControl placeholder-text="Enter command..." hide-placeholder-on-focus="true" label="&gt;" class="console-input" />
+        <engine:VisualElement style="flex-grow: 0; top: 0; left: 0; bottom: 0; right: 0; flex-direction: column; display: flex;">
+            <engine:Label text="Label" name="syntax-hint" style="color: rgb(255, 255, 255); top: auto; left: auto; right: auto; bottom: auto; position: absolute; background-color: rgba(0, 0, 0, 0.56); flex-wrap: nowrap; flex-direction: column; align-items: stretch; margin-top: 0; margin-left: 0; margin-bottom: 0; margin-right: 0; padding-right: 0; padding-left: 10px;" />
         </engine:VisualElement>
     </engine:VisualElement>
 </engine:UXML>

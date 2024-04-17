@@ -18,6 +18,8 @@ namespace ViConsole.UIToolkit
         int _commandHistoryIndex = 0;
 
         readonly TextElement _textElement;
+        Label _syntaxHint;
+        ListView _autocompleteListView;
 
         ISyntaxColorizer _colorizer;
 
@@ -25,10 +27,13 @@ namespace ViConsole.UIToolkit
         int _lastCursorIndex = 0;
         int _noParsesCount => _colorizer.NoParsesCount;
         string _command = "";
+        string _taggedCommand = "";
         List<Token> _tokenizedCommand;
         Dictionary<int, int> _indexReMap => _colorizer.IndexReMap;
+        List<string> _autocompleteHints = new();
 
         public ViConsole Controller { get; set; }
+        public ICommandRunner CommandRunner { get; set; }
 
         public ConsoleInputControl()
         {
@@ -42,6 +47,35 @@ namespace ViConsole.UIToolkit
             RegisterCallback<KeyDownEvent>(OnKeyDown, TrickleDown.TrickleDown);
 
             _colorizer = new SyntaxColorizer();
+
+            _autocompleteHints.Add("test1");
+            _autocompleteHints.Add("test2");
+            _autocompleteHints.Add("test3");
+            RefreshHints();
+        }
+
+        public ConsoleInputControl(Label syntaxHint, ListView autocompleteListView)
+        {
+            _syntaxHint = syntaxHint;
+            _autocompleteListView = autocompleteListView;
+        }
+
+        public void SetupHints()
+        {
+            _syntaxHint = panel.visualTree.Q<Label>("syntax-hint");
+            _autocompleteListView = panel.visualTree.Q<ListView>("autocomplete-hints");
+            _autocompleteListView.makeItem = () => new Label().WithClassName("autocomplete-hint");
+            _autocompleteListView.bindItem = (element, i) => (element as Label).text = _autocompleteHints[i];
+            _autocompleteListView.itemsSource = _autocompleteHints;
+        }
+
+        void RefreshHints()
+        {
+            _autocompleteListView?.schedule.Execute(() =>
+            {
+                _autocompleteListView.RefreshItems();
+                _autocompleteListView.ScrollToItem(_autocompleteHints.Count);
+            });
         }
 
         public void SetStyle(InputStyleSheet styleSheet)
@@ -57,7 +91,7 @@ namespace ViConsole.UIToolkit
             _commandHistory.Add(_command);
             _commandHistoryIndex = _commandHistory.Count - 1;
 
-            Controller.ExecuteCommand(_tokenizedCommand, _command); 
+            Controller.ExecuteCommand(_tokenizedCommand, _command, _taggedCommand);
 
             ClearCommand();
 
@@ -72,6 +106,7 @@ namespace ViConsole.UIToolkit
         void ClearCommand()
         {
             _command = "";
+            _tokenizedCommand.Clear();
             cursorIndex = 0;
             selectIndex = 0;
             SetValueWithoutNotify("");
@@ -86,6 +121,24 @@ namespace ViConsole.UIToolkit
         {
             _lastCursorIndex = cursorIndex;
             _lastSelectIndex = selectIndex;
+
+            var (cmd, pos) = CommandRunner?.SimulateExecution(_tokenizedCommand, cursorIndex) ?? (null, 0);
+            if (cmd != null)
+            {
+                _syntaxHint?.schedule.Execute(() =>
+                {
+                    _syntaxHint.style.visibility = Visibility.Visible;
+                    _syntaxHint.text = cmd.GetSyntaxHint(pos);
+                });
+            }
+            else
+            {
+                _syntaxHint?.schedule.Execute(() =>
+                {
+                    _syntaxHint.style.visibility = Visibility.Hidden;
+                    _syntaxHint.text = "";
+                });
+            }
         }
 
         void OnValueChanged(ChangeEvent<string> args)
@@ -138,8 +191,8 @@ namespace ViConsole.UIToolkit
         {
             var lexems = Parser.Parse(_command);
             _tokenizedCommand = Parser.Tokenize(lexems);
-            var taggedCommand = _colorizer.ColorizeSyntax(_command, _tokenizedCommand);
-            SetValueWithoutNotify(taggedCommand);
+            _taggedCommand = _colorizer.ColorizeSyntax(_command, _tokenizedCommand);
+            SetValueWithoutNotify(_taggedCommand);
         }
 
         bool CheckForNoParses(string txt)
@@ -215,7 +268,7 @@ namespace ViConsole.UIToolkit
         {
             if (_commandHistory.Count <= 0)
                 return;
-            
+
             ClearCommand();
             _commandHistoryIndex = Mathf.Clamp(_commandHistoryIndex, 0, _commandHistory.Count - 1);
             _command = _commandHistory[_commandHistoryIndex++];
@@ -226,7 +279,7 @@ namespace ViConsole.UIToolkit
         {
             if (_commandHistory.Count <= 0)
                 return;
-            
+
             ClearCommand();
             _commandHistoryIndex = Mathf.Clamp(_commandHistoryIndex, 0, _commandHistory.Count - 1);
             _command = _commandHistory[_commandHistoryIndex--];

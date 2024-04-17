@@ -6,7 +6,7 @@ namespace ViConsole.Tree
 {
     public interface ITreeNode : IEnumerable<ITreeNode>
     {
-        string Name { get; }
+        public string Name { get; }
         ITreeNode AddNode(ITreeNode node);
         ITreeNode GetNode(string name);
         bool TryGetNode(string name, out ITreeNode node);

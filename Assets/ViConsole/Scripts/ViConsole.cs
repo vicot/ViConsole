@@ -16,18 +16,19 @@ namespace ViConsole
 {
     public class ViConsole : MonoBehaviour
     {
-        CustomStyleProperty<Color> _propertyPrimaryColor = new CustomStyleProperty<Color>("--primary-color");
-        CustomStyleProperty<Color> _propertySecondaryColor = new CustomStyleProperty<Color>("--secondary-color");
-        CustomStyleProperty<Color> _propertyColorWarning = new CustomStyleProperty<Color>("--color-warning");
-        CustomStyleProperty<Color> _propertyColorError = new CustomStyleProperty<Color>("--color-error");
-        CustomStyleProperty<Color> _propertyColorException = new CustomStyleProperty<Color>("--color-exception");
-        CustomStyleProperty<Color> _propertyColorVariable = new CustomStyleProperty<Color>("--color-variable");
-        CustomStyleProperty<Color> _propertyColorOperator = new CustomStyleProperty<Color>("--color-operator");
-        CustomStyleProperty<Color> _propertyColorLiterals = new CustomStyleProperty<Color>("--color-literals");
+        CustomStyleProperty<Color> _propertyPrimaryColor = new("--primary-color");
+        CustomStyleProperty<Color> _propertySecondaryColor = new("--secondary-color");
+        CustomStyleProperty<Color> _propertyColorWarning = new("--color-warning");
+        CustomStyleProperty<Color> _propertyColorError = new("--color-error");
+        CustomStyleProperty<Color> _propertyColorException = new("--color-exception");
+        CustomStyleProperty<Color> _propertyColorVariable = new("--color-variable");
+        CustomStyleProperty<Color> _propertyColorOperator = new("--color-operator");
+        CustomStyleProperty<Color> _propertyColorLiterals = new("--color-literals");
 
         Dictionary<LogType, InputStyle> logStyles = new();
         InputStyleSheet styleSheet;
-
+        Dictionary<CustomStyleProperty<Color>, Color> _customColors = new();
+        
         [SerializeField] UIDocument doc;
 
         [Header("Config")] [SerializeField] int scrollback = 100;
@@ -86,28 +87,32 @@ namespace ViConsole
             _listView.Q<ScrollView>().mouseWheelScrollSize = 10000;
 
             _inputBox = _root.Q<ConsoleInputControl>();
-            _inputBox.Controller = this;
+            _inputBox.SetupHints();
+            _inputBox.Controller = this; 
+            _inputBox.CommandRunner = _commandRunner;
             if (!_styleSet)
             {
                 ApplyCustomStyle(_root.customStyle);
                 _inputBox.SetStyle(styleSheet);
                 _styleSet = true;
             }
-
         }
 
-        void OnLogReceived(string message, string stacktrace, LogType type)
-        {
-            var timestamp = $"[{DateTime.Now:HH:mm:ss}]".Colorize(Color.gray);
-            AddMessage($" [{type.ToString()}] {message}", type);
-        }
+        void OnLogReceived(string message, string stacktrace, LogType type) => AddMessageTimestamp($"[{type.ToString()}] {message}", type);
 
-        void AddMessage(string message, LogType level = LogType.Log)
+        void AddMessage(string message, LogType level = LogType.Log) => AddMessageTimestamp(message, level, false);
+
+        void AddMessageTimestamp(string message, LogType level = LogType.Log, bool withTimestamp = true)
         {
+            var timestamp = $"[{DateTime.Now:HH:mm:ss}]".Colorize(GetColor(_propertySecondaryColor));
+
             if (logStyles.TryGetValue(level, out var style))
             {
                 message = style.ApplyStyle(message);
             }
+
+            if (withTimestamp)
+                message = $"{timestamp} {message}";
 
             messages.Add(new MessageEntry { Message = message, Level = level });
             _listView?.schedule.Execute(() =>
@@ -156,8 +161,8 @@ namespace ViConsole
             else OpenConsole();
         }
 
-        void OnHistoryNext(InputAction.CallbackContext obj) => _inputBox?.NextCommand(); 
-        void OnHistoryPrev(InputAction.CallbackContext obj) => _inputBox?.PreviousCommand(); 
+        void OnHistoryNext(InputAction.CallbackContext obj) => _inputBox?.NextCommand();
+        void OnHistoryPrev(InputAction.CallbackContext obj) => _inputBox?.PreviousCommand();
 
         void CustomStylesResolved(CustomStyleResolvedEvent evt)
         {
@@ -171,22 +176,26 @@ namespace ViConsole
             if (style.TryGetValue(_propertyPrimaryColor, out color))
             {
                 logStyles[LogType.Log] = new InputStyle(color, addNoParse: false);
+                _customColors[_propertyPrimaryColor] = color;
             }
 
             if (style.TryGetValue(_propertyColorLiterals, out color))
             {
                 styleSheet[LexemeType.String] = new InputStyle(color, StringDecoration.Italic);
+                _customColors[_propertyColorLiterals] = color;
             }
 
             if (style.TryGetValue(_propertySecondaryColor, out color))
             {
                 styleSheet[LexemeType.Command] = new InputStyle(color, StringDecoration.Bold);
+                _customColors[_propertySecondaryColor] = color;
             }
 
             if (style.TryGetValue(_propertyColorVariable, out color))
             {
                 styleSheet[LexemeType.Identifier] = new InputStyle(color);
                 styleSheet[LexemeType.SpecialIdentifier] = new InputStyle(color);
+                _customColors[_propertyColorVariable] = color;
             }
 
             if (style.TryGetValue(_propertyColorOperator, out color))
@@ -196,22 +205,26 @@ namespace ViConsole
                 styleSheet[LexemeType.CloseIndex] = new InputStyle(color);
                 styleSheet[LexemeType.OpenInline] = new InputStyle(color);
                 styleSheet[LexemeType.CloseInline] = new InputStyle(color);
+                _customColors[_propertyColorOperator] = color;
             }
 
             if (style.TryGetValue(_propertyColorError, out color))
             {
                 styleSheet[LexemeType.Invalid] = new InputStyle(color, StringDecoration.Italic);
                 logStyles[LogType.Error] = new InputStyle(color, addNoParse: false);
+                _customColors[_propertyColorError] = color;
             }
 
             if (style.TryGetValue(_propertyColorWarning, out color))
             {
                 logStyles[LogType.Warning] = new InputStyle(color, addNoParse: false);
+                _customColors[_propertyColorWarning] = color;
             }
 
             if (style.TryGetValue(_propertyColorException, out color))
             {
                 logStyles[LogType.Exception] = new InputStyle(color, addNoParse: false);
+                _customColors[_propertyColorException] = color;
             }
 
             if (_inputBox != null)
@@ -258,10 +271,12 @@ namespace ViConsole
             return label;
         }
 
-        public void ExecuteCommand(IEnumerable<Token> tokens, string rawCommand)
+        public void ExecuteCommand(IEnumerable<Token> tokens, string rawCommand, string decoratedCommand)
         {
             try
             {
+                var prompt = "> ".Colorize(GetColor(_propertySecondaryColor)).Decorate(StringDecoration.Bold);
+                AddMessageTimestamp($"{prompt}{decoratedCommand}", LogType.Log);
                 var result = _commandRunner.ExecuteCommand(tokens);
                 if (result != null)
                     AddMessage($"'{result}'", LogType.Log);
@@ -272,5 +287,7 @@ namespace ViConsole
                 AddMessage($"{e.Message}", LogType.Exception);
             }
         }
+
+        Color GetColor(CustomStyleProperty<Color> colorProperty) => _customColors.GetValueOrDefault(colorProperty, InputStyle.Default.Color);
     }
 }

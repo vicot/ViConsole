@@ -18,6 +18,7 @@ namespace ViConsole
         Task Initialize(AddMessage addMessage);
         object ExecuteCommand(IEnumerable<Token> tokens);
         Tree.Tree CommandTree { get; }
+        (ICommandNode command, int currentArgument) SimulateExecution(List<Token> tokens, int cursorPosition);
     }
 
     public delegate void AddMessage(string message, LogType level);
@@ -43,6 +44,7 @@ namespace ViConsole
             var vars = CommandTree.GetDomain(Domains.Variables);
             var globals = CommandTree.GetDomain(Domains.Globals);
             var commands = CommandTree.GetDomain(Domains.Commands);
+            var converters = CommandTree.GetDomain(Domains.Converters);
 
             var postfix = Parser.ConvertToPostfix(tokens);
             if (postfix == null) return null;
@@ -71,14 +73,22 @@ namespace ViConsole
                         var args = new object[command.Parameters.Length];
                         for (var i = command.Parameters.Length - 1; i >= 0; i--)
                         {
+                            var parameter = command.Parameters[i];
                             if (operandStack.Count == 0)
                                 throw new CommandException($"Expected {command.Parameters.Length} parameters for command", token);
-                            args[i] = operandStack.Pop();
-                            if (command.Parameters[i].Type.IsEnum)
-                                if (!Enum.TryParse(command.Parameters[i].Type, args[i].ToString(), ignoreCase: true, out args[i]))
-                                    throw new CommandException($"Invalid value for parameter '{command.Parameters[i].Name}' in command", token);
+                            var value = args[i] = operandStack.Pop();
+
+                            if (converters.TryGetConverter(parameter.Type, args[i].GetType(), out var converter))
+                            {
+                                if (!converter.TryConvert(value, out args[i], parameter.Type, CommandTree))
+                                    args[i] = value; //revert
+                            }
+
+                            // if (command.Parameters[i].Type.IsEnum)
+                            //     if (!Enum.TryParse(command.Parameters[i].Type, args[i].ToString(), ignoreCase: true, out args[i]))
+                            //         throw new CommandException($"Invalid value for parameter '{command.Parameters[i].Name}' in command", token);
                             if (!command.Parameters[i].Type.IsInstanceOfType(args[i]))
-                                throw new CommandException($"Invalid value for parameter '{command.Parameters[i].Name}' in command", token);
+                                throw new CommandException($"Invalid value '{value}' for parameter '{command.Parameters[i].Name}' in command", token);
                         }
 
                         object target = null;
@@ -128,21 +138,30 @@ namespace ViConsole
 
         private void Discover()
         {
+            var types = CommandTree.GetDomain(Domains.Types);
             var commands = CommandTree.GetDomain(Domains.Commands);
             var presenters = CommandTree.GetDomain(Domains.Presenters);
+            var converters = CommandTree.GetDomain(Domains.Converters);
 
             var assemblies = GetAssemblies();
             foreach (var type in assemblies.SelectMany(a => a.GetTypes()))
             {
+                DiscoverType(types, type);
                 var methods = type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance);
                 foreach (var method in methods)
                 {
                     DiscoverCommand(commands, method);
                     DiscoverPresenter(presenters, method);
+                    DiscoverConverters(converters, method);
                 }
             }
 
             commands.IsEnabled = true;
+        }
+
+        void DiscoverType(IDomainNode domain, Type type)
+        {
+            domain.RegisterType(type);
         }
 
         void DiscoverCommand(IDomainNode domain, MethodInfo method)
@@ -159,6 +178,109 @@ namespace ViConsole
                 domain.RegisterPresenter(method, attribute);
         }
 
+        void DiscoverConverters(IDomainNode domain, MethodInfo method)
+        {
+            var attribute = method.GetCustomAttribute<ValueConverterAttribute>();
+            if (attribute != null)
+                domain.RegisterConverter(method, attribute);
+        }
+
+        public (ICommandNode command, int currentArgument) SimulateExecution(List<Token> tokens, int cursorPosition)
+        {
+            var postfix = Parser.ConvertToPostfix(tokens);
+            if (postfix == null) return (null, 0);
+            var operandStack = new Stack<object>();
+
+            Token insideToken = null;
+            foreach (var token in tokens)
+            {
+                if (token.Lexeme.Position > cursorPosition)
+                    break;
+
+                if (token.Lexeme.Position + token.Lexeme.Text.Length > cursorPosition)
+                {
+                    //perfect match
+                    insideToken = token;
+                    break;
+                }
+
+                if (token.Type is LexemeType.Command or LexemeType.Identifier or LexemeType.SpecialIdentifier or LexemeType.String)
+                    insideToken = token;
+
+                if (token.Type == LexemeType.OpenInline)
+                    insideToken = null;
+            }
+
+            if (insideToken == null)
+                return (null, 0);
+
+            var commands = CommandTree.GetDomain(Domains.Commands);
+
+            foreach (var token in postfix)
+            {
+                switch (token.Type)
+                {
+                    case LexemeType.Identifier:
+                    case LexemeType.SpecialIdentifier:
+                    case LexemeType.String:
+                    {
+                        operandStack.Push(token);
+                        break;
+                    }
+
+                    case LexemeType.Command:
+                        if (!commands.TryGetCommand(token.Lexeme.Value, out var command))
+                            return (null, 0);
+
+                        if (token == insideToken)
+                            return (command, 0);
+
+                        var args = new object[command.Parameters.Length];
+                        int hit = -1;
+                        bool earlyExit = false;
+                        int i;
+                        for (i = command.Parameters.Length - 1; i >= 0; i--)
+                        {
+                            if (operandStack.Count == 0)
+                            {
+                                earlyExit = true;
+                                break;
+                            }
+
+                            args[i] = operandStack.Pop();
+                            if ((Token)args[i] == insideToken)
+                            {
+                                hit = i;
+                            }
+                        }
+
+                        if (earlyExit && hit < 0)
+                        {
+                            Debug.LogWarning("Should not happen");
+                            return (null, 0);
+                        }
+
+                        if (hit >= 0)
+                        {
+                            if (!earlyExit)
+                                return (command, hit + 1);
+
+                            return (command, hit - (args.Length - i) + 2);
+                        }
+
+                        operandStack.Push(token);
+                        break;
+
+                    case LexemeType.Invalid:
+                    default:
+                        break; //ignore
+                }
+            }
+
+            //not found?
+            return (null, 0);
+        }
+
         #region builtin presenters
 
         [PresenterProviderFor(typeof(IEnumerable))]
@@ -168,7 +290,7 @@ namespace ViConsole
             foreach (var o in obj)
             {
                 ++i;
-                
+
                 if (o == null)
                 {
                     addMessage($"[{i}] null", LogType.Log);
@@ -179,8 +301,8 @@ namespace ViConsole
                     addMessage($"[{i}] {o}", LogType.Log);
                 }
             }
-        }        
-        
+        }
+
         [PresenterProviderFor(typeof(GameObject))]
         static void GameObjectPresenter(GameObject obj, AddMessage addMessage)
         {
@@ -434,12 +556,36 @@ namespace ViConsole
 
             presenter.Execute(new[] { obj, _addMessage });
         }
-        
+
         [Command("getcomponent", "Get component from object", isBuiltIn: true)]
         object GetComponent(GameObject obj, Type type)
         {
             return obj.GetComponent(type);
         }
+
+        #endregion
+
+        #region builtin converters
+
+        [ValueConverter(typeof(Type), typeof(string), builtin: true)]
+        static bool ConvertToType(string value, out Type result, Tree.Tree tree)
+        {
+            result = null;
+            var types = tree.GetDomain(Domains.Types);
+            
+            var matches = types.FindTypes(value).ToList();
+            if (matches.Count > 1)
+                return false;
+            if (matches.Count == 0)
+                return false;
+                
+            result = matches.First().Type;
+            return true;
+        }
+        
+        
+        [ValueConverter(typeof(Enum))]
+        static bool ConvertToEnum(string value, out object result, Type targetType) => Enum.TryParse(targetType, value, ignoreCase: true, out result);
 
         #endregion
     }

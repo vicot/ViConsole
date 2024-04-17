@@ -1,6 +1,8 @@
-﻿namespace ViConsole.Parsing
+﻿using System;
+
+namespace ViConsole.Parsing
 {
-    public class Lexeme
+    public class Lexeme : IEquatable<Lexeme>
     {
         public LexemeType Type { get; set; }
         public string Value { get; set; }
@@ -24,6 +26,29 @@
             Type = type;
             Value = value;
         }
+
+        public bool Equals(Lexeme other)
+        {
+            if (ReferenceEquals(null, other)) return false;
+            if (ReferenceEquals(this, other)) return true;
+            return Type == other.Type && Position == other.Position;
+        }
+
+        public override bool Equals(object obj)
+        {
+            if (ReferenceEquals(null, obj)) return false;
+            if (ReferenceEquals(this, obj)) return true;
+            if (obj.GetType() != this.GetType()) return false;
+            return Equals((Lexeme)obj);
+        }
+
+        public override int GetHashCode() => HashCode.Combine((int)Type, Position);
+
+        public static bool operator ==(Lexeme left, Lexeme right) => Equals(left, right);
+
+        public static bool operator !=(Lexeme left, Lexeme right) => !Equals(left, right);
+
+        public override string ToString() => $"[Lexeme] {Type}:{Position}: {Value}";
     }
 
     public enum LexemeType

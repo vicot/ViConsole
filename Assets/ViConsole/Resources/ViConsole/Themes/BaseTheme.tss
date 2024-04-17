@@ -4,7 +4,7 @@
     --background-color: #2d2d2d;
     --secondary-background-color: #303030;
 
-    --color-literals: #aaaaaa;
+    --color-literals: #c2a161;
     --color-variable: #ffbb00;
     --color-operator: #bb8888;
     

@@ -170,10 +170,17 @@ namespace ViConsole.Parsing
         public static List<Token> Tokenize(List<Lexeme> lexemes)
         {
             var tokens = new List<Token>();
+            bool firstToken = true;
 
             foreach (var lexeme in lexemes)
             {
+                if (!firstToken && lexeme.Type == LexemeType.Command)
+                {
+                    lexeme.Type = LexemeType.String;
+                }
+                
                 tokens.Add(new Token(lexeme));
+                firstToken = lexeme.Type == LexemeType.OpenInline;
             }
 
             return tokens;
@@ -183,6 +190,7 @@ namespace ViConsole.Parsing
         {
             Stack<Token> operatorStack = new();
             List<Token> output = new();
+            if (tokens == null || !tokens.Any()) return null;
 
             foreach (var token in tokens)
             {

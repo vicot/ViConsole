@@ -48,6 +48,15 @@
 
 }
 
+.console-input > .unity-label {
+    color: var(--secondary-color);
+    min-width: initial;
+    -unity-font-style: bold;
+}
+#ConsoleFrame > .console-input:focus > Label {
+    color: var(--secondary-color);
+}
+
 .main-frame Scroller > #unity-low-button,
 .main-frame Scroller > #unity-high-button {
     background-color: var(--scrollbar-color-handle);

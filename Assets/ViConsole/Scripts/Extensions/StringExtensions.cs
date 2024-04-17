@@ -7,7 +7,7 @@ namespace ViConsole.Extensions
     public static class StringExtensions
     {
         static int _tmp;
-        
+
         public static IEnumerable<int> IndicesOf(this string source, string subString, StringComparison comparisonType = StringComparison.OrdinalIgnoreCase)
         {
             int index = -1;
@@ -18,12 +18,24 @@ namespace ViConsole.Extensions
                 yield return index;
             } while (index != -1);
         }
-        
+
+        public static bool FuzzyContains(this string text, string pattern)
+        {
+            var i = -1;
+            foreach (var letter in pattern)
+            {
+                i = text.IndexOf(letter, i + 1);
+                if (i < 0) return false;
+            }
+
+            return true;
+        }
+
         public static string NoParse(this string message, ref int totalPrefixLength, ref int totalSuffixLength)
             => message.DecorateTag("noparse", ref totalPrefixLength, ref totalSuffixLength);
 
         public static string Colorize(this string message, Color color) => Colorize(message, color, ref _tmp, ref _tmp);
-        
+
         public static string Colorize(this string message, Color color, ref int totalPrefixLength, ref int totalSuffixLength)
         {
             const string suffix = "</color>";
@@ -48,7 +60,7 @@ namespace ViConsole.Extensions
 
             if (decoration.HasFlag(StringDecoration.Strikethrough))
                 message = message.DecorateStrikethrough(ref totalPrefixLength, ref totalSuffixLength);
-            
+
             return message;
         }
 
@@ -66,10 +78,10 @@ namespace ViConsole.Extensions
 
         static string DecorateBold(this string message, ref int totalPrefixLength, ref int totalSuffixLength)
             => message.DecorateTag("b", ref totalPrefixLength, ref totalSuffixLength);
-        
+
         static string DecorateUnderline(this string message, ref int totalPrefixLength, ref int totalSuffixLength)
             => message.DecorateTag("u", ref totalPrefixLength, ref totalSuffixLength);
-        
+
         static string DecorateStrikethrough(this string message, ref int totalPrefixLength, ref int totalSuffixLength)
             => message.DecorateTag("s", ref totalPrefixLength, ref totalSuffixLength);
     }

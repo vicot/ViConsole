@@ -5,7 +5,7 @@ using ViConsole.Extensions;
 
 namespace ViConsole.Parsing
 {
-    public class Token
+    public class Token : IEquatable<Token>
     {
         public Token(Lexeme lexeme)
         {
@@ -36,6 +36,29 @@ namespace ViConsole.Parsing
         public Lexeme Lexeme { get; }
 
         public int Priority { get; }
+
+        public bool Equals(Token other)
+        {
+            if (ReferenceEquals(null, other)) return false;
+            if (ReferenceEquals(this, other)) return true;
+            return Type == other.Type && Equals(Lexeme, other.Lexeme);
+        }
+
+        public override bool Equals(object obj)
+        {
+            if (ReferenceEquals(null, obj)) return false;
+            if (ReferenceEquals(this, obj)) return true;
+            if (obj.GetType() != this.GetType()) return false;
+            return Equals((Token)obj);
+        }
+
+        public override int GetHashCode() => HashCode.Combine((int)Type, Lexeme);
+
+        public static bool operator ==(Token left, Token right) => Equals(left, right);
+
+        public static bool operator !=(Token left, Token right) => !Equals(left, right);
+
+        public override string ToString() => $"[Token] {Type}:{Lexeme.Position}: {Lexeme.Value}";
     }
 
     public enum TokenType
