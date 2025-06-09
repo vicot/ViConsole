@@ -1,5 +1,5 @@
 <engine:UXML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:engine="UnityEngine.UIElements" xmlns:editor="UnityEditor.UIElements" noNamespaceSchemaLocation="../../../../../UIElementsSchema/UIElements.xsd" editor-extension-mode="False">
-    <Style src="project://database/Assets/ViConsole/Resources/ViConsole/Themes/DefaultTheme.tss?fileID=-4733365628477956816&amp;guid=934316290e0246c489f9c2942d7787c0&amp;type=3#DefaultTheme" />
+    <Style src="../Themes/DefaultTheme.tss?fileID=-4733365628477956816&amp;guid=934316290e0246c489f9c2942d7787c0&amp;type=3#DefaultTheme" />
     <engine:VisualElement name="ConsoleFrame" class="main-frame" style="bottom: auto;">
         <engine:ListView selection-type="None" allow-add="false" allow-remove="false" show-alternating-row-backgrounds="ContentOnly" virtualization-method="DynamicHeight" />
         <engine:VisualElement style="flex-grow: 0; top: 0; left: 0; bottom: 0; right: 0; flex-direction: column-reverse; display: flex;">

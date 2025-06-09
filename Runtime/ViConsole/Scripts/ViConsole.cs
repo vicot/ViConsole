@@ -62,10 +62,13 @@ namespace ViConsole
             // }
             //
             // Instance = this;
-            DontDestroyOnLoad(gameObject);
 
             _nextCommandAction = new InputAction("NextCommand", InputActionType.Button, "<Keyboard>/downArrow");
             _previousCommandAction = new InputAction("PreviousCommand", InputActionType.Button, "<Keyboard>/upArrow");
+            _root = doc.rootVisualElement;
+            CloseConsole();
+
+            DontDestroyOnLoad(gameObject);
         }
 
         async void Start()
@@ -73,9 +76,7 @@ namespace ViConsole
             await _commandRunner.Initialize(AddMessage);
             messages.MaxLength = scrollback;
             Application.logMessageReceivedThreaded += OnLogReceived;
-
-            _root = doc.rootVisualElement;
-            CloseConsole();
+            
             _root.RegisterCallback<CustomStyleResolvedEvent>(CustomStylesResolved);
 
             _listView = _root.Q<ListView>();

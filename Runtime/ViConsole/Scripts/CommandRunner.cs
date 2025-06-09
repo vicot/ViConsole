@@ -483,8 +483,8 @@ namespace ViConsole
             return null;
         }
 
-        [Command("acmptest", isBuiltIn: true)]
-        object GetObjectAll2(Type type) => GetObjectAll(FindByTypes.Type, type);
+        //[Command("acmptest", isBuiltIn: true)]
+        //object GetObjectAll2(Type type) => GetObjectAll(FindByTypes.Type, type);
         
         [Command("findall", "Find objects in hierarchy by Name (starting with), Tag or component Type", isBuiltIn: true)]
         object GetObjectAll(FindByTypes type, object value)
