@@ -436,8 +436,9 @@ namespace ViConsole
             List<AssemblyName> assemblyNames = _rootAssembly.GetReferencedAssemblies().ToList();
             List<Assembly> assemblies = new();
             assemblies.Add(_rootAssembly);
+            assemblies.Add(Assembly.GetExecutingAssembly());
             assemblies.AddRange(assemblyNames.Select(Assembly.Load));
-            return assemblies;
+            return assemblies.Distinct();
         }
 
         [Command("find", "Find object in hierarchy by Name, Tag or component Type", isBuiltIn: true)]
